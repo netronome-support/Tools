@@ -82,8 +82,6 @@ static int mac_updating = 1;
 
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
-#define NB_MBUF   8192
-
 #define MAX_PKT_BURST 32
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
 #define MEMPOOL_CACHE_SIZE 256
@@ -91,10 +89,12 @@ static int mac_updating = 1;
 /*
  * Configurable number of RX/TX ring descriptors
  */
-#define RTE_TEST_RX_DESC_DEFAULT 512
-#define RTE_TEST_TX_DESC_DEFAULT 512
+#define RTE_TEST_RX_DESC_DEFAULT 1024
+#define RTE_TEST_TX_DESC_DEFAULT  256
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
+
+#define RTE_MBUF_DESC_MARGIN     1024
 
 /* ethernet addresses of ports */
 static struct ether_addr rt_ports_eth_addr[RTE_MAX_ETHPORTS];
@@ -154,7 +154,7 @@ struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
 
 #define MAX_TIMER_PERIOD 86400 /* 1 day max */
 /* A tsc-based timer responsible for triggering statistics printout */
-static uint64_t timer_period = 5; /* default period is 10 seconds */
+static uint64_t timer_period = 2; /* default period is 10 seconds */
 
 static inline void
 update_load_statistics (int portid, int rx_pkt_cnt)
@@ -657,13 +657,6 @@ main(int argc, char **argv)
 	/* convert to number of cycles */
 	timer_period *= rte_get_timer_hz();
 
-	/* create the mbuf pool */
-	rt_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", NB_MBUF,
-		MEMPOOL_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE,
-		rte_socket_id());
-	if (rt_pktmbuf_pool == NULL)
-		rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
-
 	nb_ports = rte_eth_dev_count();
 	if (nb_ports == 0)
 		rte_exit(EXIT_FAILURE, "No Ethernet ports - bye\n");
@@ -696,6 +689,16 @@ main(int argc, char **argv)
 		printf("Notice: odd number of ports in portmask.\n");
 		rt_dst_ports[last_port] = last_port;
 	}
+
+        int nb_mbuf = nb_ports_in_mask * (nb_rxd + nb_txd)
+            + RTE_MBUF_DESC_MARGIN;
+
+	/* create the mbuf pool */
+	rt_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", nb_mbuf,
+		MEMPOOL_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE,
+		rte_socket_id());
+	if (rt_pktmbuf_pool == NULL)
+		rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
 
 	rx_lcore_id = 0;
 	qconf = NULL;
