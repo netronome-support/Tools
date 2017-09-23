@@ -39,6 +39,7 @@ rt_hwaddr_str (const rt_eth_addr_t hwaddr)
 void dbgmsg_hexdump (void *data, int len);
 
 extern void dbgmsg_init (void);
+extern int dbgmsg_fopen (const char *fname);
 extern void dbgmsg_close (void);
 
 #define INFO    1

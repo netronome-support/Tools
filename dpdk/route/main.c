@@ -473,6 +473,7 @@ rt_parse_args(int argc, char **argv)
 		{ "no-mac-updating", no_argument, &mac_updating, 0},
                 { "iface-addr", required_argument, NULL, 1001},
                 { "route", required_argument, NULL, 1002},
+                { "log-file", required_argument, NULL, 1003},
 		{NULL, 0, 0, 0}
 	};
 
@@ -521,6 +522,12 @@ rt_parse_args(int argc, char **argv)
 
                 case 1002:
                         ret = parse_ipv4_route(optarg);
+                        if (ret < 0)
+                            return -1;
+                        break;
+
+                case 1003:
+                        ret = dbgmsg_fopen(optarg);
                         if (ret < 0)
                             return -1;
                         break;

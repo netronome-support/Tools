@@ -13,6 +13,9 @@ void dbgmsg (int level, rt_pkt_t pkt, const char *fmt, ...)
     char str[4096];
     int n = 0;
 
+    if (rt_log_fd == NULL)
+        return;
+
     const char *lvlstr;
     switch (level) {
         case INFO:   lvlstr = "I"; break;
@@ -59,12 +62,22 @@ void dbgmsg_hexdump (void *data, int len)
 
 void dbgmsg_init (void)
 {
-    rt_log_fd = fopen("/tmp/rt.log", "a");
-    assert(rt_log_fd != NULL);
-    fprintf(rt_log_fd, "\n\n----------\n");
-    fflush(rt_log_fd);
     nopkt.mbuf = NULL;
     nopkt.pi = NULL;
+}
+
+int dbgmsg_fopen (const char *fname)
+{
+    if (rt_log_fd != NULL)
+        fclose(rt_log_fd);
+    rt_log_fd = fopen(fname, "a");
+    if (rt_log_fd == NULL) {
+        fprintf(stderr, "ERROR: faild to open %s\n", fname);
+        return -1;
+    }
+    fprintf(rt_log_fd, "\n\n----------\n");
+    fflush(rt_log_fd);
+    return 0;
 }
 
 void dbgmsg_close (void)
