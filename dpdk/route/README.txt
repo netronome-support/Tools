@@ -2,8 +2,6 @@ This is a DPDK based tool that implements a simple IPv4 router.
 
 It is based on l2fwd of DPDK 16.11 (see main.c file).
 
-The tool logs certain events and packets to /tmp/rt.log.
-
 Features:
 
  * ARP - Will both resolve addresses as well as respond to requests.
@@ -35,6 +33,11 @@ Command Line Arguments (beyond what l2fwd supports):
  --route [<route domain>#]<IPv4 addr>/<prefix length>@<next hop IPv4 addr>
 
     This adds a route to the specified (or default) routing domain.
+
+ --log-file <file name>
+
+    Log packet events to specified file. Note that this file grows
+    indefinitely and may fill up the file system.
 
 Limitations:
 

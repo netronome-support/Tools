@@ -77,8 +77,8 @@
 
 static volatile bool force_quit;
 
-/* MAC updating enabled by default */
-static int mac_updating = 1;
+/* Print statistics enabled by default */
+static int print_statistics = 1;
 
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
@@ -250,40 +250,6 @@ print_stats(void)
 	printf("\n====================================================\n");
 }
 
-static void
-rt_mac_updating(struct rte_mbuf *m, unsigned dest_portid)
-{
-	struct ether_hdr *eth;
-	void *tmp;
-
-	eth = rte_pktmbuf_mtod(m, struct ether_hdr *);
-
-	/* 02:00:00:00:00:xx */
-	tmp = &eth->d_addr.addr_bytes[0];
-	*((uint64_t *)tmp) = 0x000000000002 + ((uint64_t)dest_portid << 40);
-
-	/* src addr */
-	ether_addr_copy(&rt_ports_eth_addr[dest_portid], &eth->s_addr);
-}
-
-static void __attribute__((unused))
-rt_simple_forward(struct rte_mbuf *m, unsigned portid)
-{
-	unsigned dst_port;
-	int sent;
-	struct rte_eth_dev_tx_buffer *buffer;
-
-	dst_port = rt_dst_ports[portid];
-
-	if (mac_updating)
-		rt_mac_updating(m, dst_port);
-
-	buffer = tx_buffer[dst_port];
-	sent = rte_eth_tx_buffer(dst_port, 0, buffer, m);
-	if (sent)
-		port_statistics[dst_port].tx += sent;
-}
-
 /* main processing loop */
 static void
 rt_main_loop(void)
@@ -354,8 +320,11 @@ rt_main_loop(void)
 					if (lcore_id == rte_get_master_lcore()) {
                                                 rt_dhcp_discover();
 
-						print_stats();
-						/* reset the timer */
+						if (print_statistics) {
+                                                        print_stats();
+						}
+
+                                                /* reset the timer */
 						timer_tsc = 0;
 					}
 				}
@@ -469,11 +438,10 @@ rt_parse_args(int argc, char **argv)
 	int option_index;
 	char *prgname = argv[0];
 	static struct option lgopts[] = {
-		{ "mac-updating", no_argument, &mac_updating, 1},
-		{ "no-mac-updating", no_argument, &mac_updating, 0},
                 { "iface-addr", required_argument, NULL, 1001},
                 { "route", required_argument, NULL, 1002},
                 { "log-file", required_argument, NULL, 1003},
+                { "no-statistics", no_argument, &print_statistics, 0},
 		{NULL, 0, 0, 0}
 	};
 
@@ -651,8 +619,6 @@ main(int argc, char **argv)
 	ret = rt_parse_args(argc, argv);
 	if (ret < 0)
 		rte_exit(EXIT_FAILURE, "Invalid ROUTE arguments\n");
-
-	printf("MAC updating %s\n", mac_updating ? "enabled" : "disabled");
 
 	/* convert to number of cycles */
 	timer_period *= rte_get_timer_hz();

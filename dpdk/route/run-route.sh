@@ -22,6 +22,10 @@ arg+=( "-p" "f" )
 # Number of Queues per core
 arg+=( "-q" "4" )
 
+# arg+=( "--no-statistics" )
+
+# arg+=( "--log-file" "/var/log/dpdk-route.log" )
+
 arg+=( "--iface-addr" "0:1#10.0.0.10/24" )
 arg+=( "--iface-addr" "1:1#10.0.1.11/24" )
 arg+=( "--iface-addr" "2:2#10.0.0.12/24" )
