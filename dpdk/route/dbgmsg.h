@@ -2,12 +2,28 @@
 #define __RT_DBGMSG_H__
 
 #include <arpa/inet.h>
+#include <stdint.h>
 
 #include "defines.h"
 #include "pktutils.h"
 
-extern void dbgmsg (int level, rt_pkt_t pkt, const char *fmt, ...);
+typedef struct {
+    uint64_t last;
+    int suppressed;
+    float credits;
+    float speed;
+} dbgmsg_state_t;
+
+extern void f_dbgmsg (dbgmsg_state_t *,
+    int level, rt_pkt_t pkt, const char *fmt, ...);
+
 extern rt_pkt_t nopkt;
+
+#define dbgmsg(level, pkt, fmt, ...) \
+do { \
+    static dbgmsg_state_t dbgstate = { 0, 0, 64.0, 1.0 }; \
+    f_dbgmsg(&dbgstate, level, pkt, fmt, ##__VA_ARGS__); \
+} while(0)
 
 static inline const char *
 rt_ipaddr_str (char *str, rt_ipv4_addr_t ipaddr)

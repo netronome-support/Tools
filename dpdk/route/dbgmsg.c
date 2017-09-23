@@ -2,19 +2,46 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#include <rte_cycles.h>
+
 #include "defines.h"
 #include "dbgmsg.h"
 
 FILE *rt_log_fd = NULL;
 rt_pkt_t nopkt;
 
-void dbgmsg (int level, rt_pkt_t pkt, const char *fmt, ...)
+static float dbg_speed_factor = 0.0;
+
+static inline float
+dbg_calc_credits (dbgmsg_state_t *dbgstate)
+{
+    uint64_t tsc_current = rte_rdtsc();
+    uint64_t elapsed = (dbgstate->last == 0) ? 0
+        : (tsc_current - dbgstate->last);
+    float credits = dbgstate->credits
+        + elapsed * dbgstate->speed * dbg_speed_factor;
+    dbgstate->last = tsc_current;
+    return credits;
+}
+
+void f_dbgmsg (dbgmsg_state_t *dbgstate,
+    int level, rt_pkt_t pkt, const char *fmt, ...)
 {
     char str[4096];
     int n = 0;
 
     if (rt_log_fd == NULL)
         return;
+
+    float credits = dbg_calc_credits(dbgstate);
+    
+    if (credits < 0.0) {
+        dbgstate->credits = credits;
+        dbgstate->suppressed++;
+        return;
+    } else {
+        dbgstate->credits = credits - 1.0;
+    }
 
     const char *lvlstr;
     switch (level) {
@@ -64,6 +91,7 @@ void dbgmsg_init (void)
 {
     nopkt.mbuf = NULL;
     nopkt.pi = NULL;
+    dbg_speed_factor =  1.0 / (float) rte_get_tsc_hz();
 }
 
 int dbgmsg_fopen (const char *fname)
