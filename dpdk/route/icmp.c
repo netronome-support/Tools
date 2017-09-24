@@ -22,7 +22,7 @@ rt_icmp_request (rt_pkt_t pkt, void *icmp)
 
     /* Update ICMP checksum */
     *PTR(icmp, uint16_t, 2) = 0;
-    uint16_t chksum = rt_pkt_chksum(icmp, icmplen, 0);
+    uint16_t chksum = ~ rt_pkt_chksum(icmp, icmplen, 0);
     *PTR(icmp, uint16_t, 2) = htons(chksum);
 
     /* Reverse IP addresses */
