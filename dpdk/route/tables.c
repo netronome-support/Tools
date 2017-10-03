@@ -4,6 +4,7 @@
 
 #include "tables.h"
 #include "dbgmsg.h"
+#include "functions.h"
 
 /**********************************************************************/
 /*  Direct Table (Must be FAST) */
@@ -232,6 +233,26 @@ rt_lpm_dump (FILE *fd)
         fprintf(fd, "- %18p %18p %18p  %s\n", p, p->prev, p->next,
             tmpstr);
         fflush(fd);
+    }
+}
+
+void
+rt_lpm_gen_icmp_requests (void)
+{
+    dbgmsg(INFO, nopkt, "Periodic request to Generate ICMP PINGs");
+
+    rt_lpm_t *p;
+
+    for (p = rt_db_home.next ; p != &rt_db_home ; p = p->next) {
+        if ((p->flags & RT_LPM_F_HAS_NEXTHOP) && (p->nh == NULL)) {
+            p->nh = rt_resolve_nexthop(p->rdidx, p->nhipa);
+        }
+    }
+
+    for (p = rt_db_home.next ; p != &rt_db_home ; p = p->next) {
+        if (p->flags & RT_LPM_F_IS_NEXTHOP) {
+            rt_icmp_gen_request(p->pi->rdidx, p->prefix.addr);
+        }
     }
 }
 

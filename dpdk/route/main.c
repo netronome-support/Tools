@@ -80,6 +80,8 @@ static volatile bool force_quit;
 /* Print statistics enabled by default */
 static int print_statistics = 1;
 
+static int ping_nexthops = 0;
+
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
 #define MAX_PKT_BURST 32
@@ -323,6 +325,9 @@ rt_main_loop(void)
 						if (print_statistics) {
                                                         print_stats();
 						}
+                                                if (ping_nexthops) {
+                                                        rt_lpm_gen_icmp_requests();
+                                                }
 
                                                 /* reset the timer */
 						timer_tsc = 0;
@@ -442,7 +447,8 @@ rt_parse_args(int argc, char **argv)
                 { "route", required_argument, NULL, 1002},
                 { "log-file", required_argument, NULL, 1003},
                 { "no-statistics", no_argument, &print_statistics, 0},
-		{NULL, 0, 0, 0}
+                { "ping-nexthops", no_argument, &ping_nexthops, 1},
+		{ NULL, 0, 0, 0}
 	};
 
 	argvopt = argv;

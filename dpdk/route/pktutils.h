@@ -41,8 +41,17 @@ typedef struct {
 } __attribute__((packed)) rt_udp_hdr_t;
 
 typedef struct {
+    uint8_t     type;
+    uint8_t     code;
+    uint16_t    chksum;
+    uint16_t    ident;
+    uint16_t    seq;
+} __attribute__((packed)) rt_icmp_hdr_t;
+
+typedef struct {
     struct rte_mbuf *mbuf;
     rt_port_info_t *pi; /* Receive Port */
+    rt_rd_t rdidx; /* Routing Domain Index */
     rt_eth_hdr_t *eth;
     struct {
         void *l3;

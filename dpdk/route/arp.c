@@ -67,7 +67,7 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
         dbgmsg(WARN, pkt, "ignore learning zero IPv4 address");
         return;
     }
-    rt_lpm_t *rt = rt_lpm_lookup(pi->rdidx, ipaddr);
+    rt_lpm_t *rt = rt_lpm_lookup(pkt.rdidx, ipaddr);
     if (rt == NULL) {
         dbgmsg(WARN, pkt, "no subnet of received ARP (%s)",
             rt_ipaddr_nr_str(ipaddr));
@@ -76,23 +76,23 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
     if (rt->prefix.len == 32) {
         if (rt->flags & RT_LPM_F_LOCAL) {
             dbgmsg(WARN, pkt, "ARP with conflicting IP address (%u) %s",
-                pi->rdidx, rt_ipaddr_nr_str(ipaddr));
+                pkt.rdidx, rt_ipaddr_nr_str(ipaddr));
             return;
         }
         if ((rt->flags & RT_LPM_F_HAS_PORTINFO) && (rt->pi != pi)) {
             dbgmsg(WARN, pkt, "ARP with address (%u) %s of differnt"
                 " port (%u)",
-                pi->rdidx, rt_ipaddr_nr_str(ipaddr), rt->pi->idx);
+                pkt.rdidx, rt_ipaddr_nr_str(ipaddr), rt->pi->idx);
             return;
         }
     } else {
         dbgmsg(INFO, nopkt, "ARP creating host route for (%u) %s",
-            pi->rdidx, rt_ipaddr_nr_str(ipaddr));
-        rt = rt_lpm_host_create(rt->rdidx, ipaddr, pi, 0);
+            pkt.rdidx, rt_ipaddr_nr_str(ipaddr));
+        rt = rt_lpm_host_create(pkt.rdidx, ipaddr, pi, 0);
     } 
 
     dbgmsg(INFO, nopkt, "ARP learned (%u) %s : %s",
-       pi->rdidx, rt_ipaddr_nr_str(ipaddr),
+       pkt.rdidx, rt_ipaddr_nr_str(ipaddr),
        rt_hwaddr_str(hwaddr));
 
     rt_lpm_set_hwaddr(rt, hwaddr);
@@ -130,7 +130,7 @@ rt_arp_request_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
     rt_pkt_set_hw_addrs(pkt, pi, &ap.s_hw_addr);
     /* Debug Message */
     char t0[32], t1[32];
-    dbgmsg(INFO, pkt, "ARP sending reply for (%u) %s back to %s", pi->rdidx,
+    dbgmsg(INFO, pkt, "ARP sending reply for (%u) %s back to %s", pkt.rdidx,
         rt_ipaddr_str(t0, reply.s_ip_addr),
         rt_ipaddr_str(t1, reply.t_ip_addr));
     /* Reply */
@@ -140,8 +140,7 @@ rt_arp_request_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 static inline void
 rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 {
-    rt_port_info_t *pi = pkt.pi;
-    rt_rd_t rdidx = pi->rdidx;
+    rt_rd_t rdidx = pkt.rdidx;
     rt_pkt_discard(pkt);
     rt_lpm_t *rt = rt_lpm_lookup(rdidx, ap.s_ip_addr);
     if ((rt == NULL) || (rt->prefix.len != 32)) {
@@ -163,7 +162,7 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
     char t0[32], t1[32];
     dbgmsg(INFO, pkt, "ARP reply received from %s (%s) for (%u) %s",
         rt_ipaddr_str(t0, ap.s_ip_addr),
-        rt_hwaddr_str(ap.s_hw_addr), pi->rdidx,
+        rt_hwaddr_str(ap.s_hw_addr), rdidx,
         rt_ipaddr_str(t1, ap.t_ip_addr));
 
     rt_lpm_set_hwaddr(rt, ap.s_hw_addr);
@@ -248,14 +247,15 @@ rt_arp_request (rt_port_info_t *pi, rt_ipv4_addr_t ipda)
     rt_pkt_t pkt;
     rt_pkt_create(&pkt);
     pkt.pi = pi;
+    pkt.rdidx = pi->rdidx;
 
     rt_pkt_set_hw_addrs(pkt, pi, rt_eth_bcast_hw_addr);
     /* Set ETHTYPE to ARP */
     pkt.eth->ethtype = htons(0x0806);
     pkt.pp.l3 = &((uint8_t *) pkt.eth)[14];
 
-    dbgmsg(INFO, pkt, "ARP generate request for (%u) %s", pi->rdidx,
-        rt_ipaddr_nr_str(ipda));
+    dbgmsg(INFO, pkt, "ARP generate request for (%u) %s",
+        pkt.rdidx, rt_ipaddr_nr_str(ipda));
 
     rt_arp_request_compose(pi, ipda, pkt.pp.l3);
     rt_pkt_set_length(pkt, 14 + sizeof(rt_pkt_arp_t));
@@ -273,7 +273,6 @@ rt_arp_generate (rt_pkt_t pkt, rt_ipv4_addr_t ipda, rt_lpm_t *rt)
         rt = rt_lpm_host_create(rt->rdidx, ipda, pi, 0);
     }
     if (rt->flags & RT_LPM_F_HAS_PACKET) {
-        rt_stats_incr(1);
         rt_pkt_discard(rt->pkt);
     }
     /* Attach packet to host route */

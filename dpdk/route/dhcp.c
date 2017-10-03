@@ -108,6 +108,7 @@ rt_dhcp_transmit (rt_port_info_t *pi, rt_dhcp_info_t *info, uint8_t msgtype)
     rt_pkt_t pkt;
     rt_pkt_create(&pkt);
     pkt.pi = pi;
+    pkt.rdidx = pi->rdidx;
 
     /* Prepare Ethernet, IP, and UDP headers */
     rt_pkt_set_hw_addrs(pkt, pi, rt_eth_bcast_hw_addr);

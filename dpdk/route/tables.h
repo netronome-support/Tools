@@ -43,6 +43,7 @@ typedef struct rt_lpm_s {
 #define RT_LPM_F_HAS_PACKET     (1 << 2)
 #define RT_LPM_F_HAS_NEXTHOP    (1 << 3)
 #define RT_LPM_F_HAS_PORTINFO   (1 << 4)
+#define RT_LPM_F_IS_NEXTHOP     (1 << 5)
 
 #define RT_DT_SIZE 1023
 extern rt_dt_route_t dt[RT_DT_SIZE];
@@ -114,5 +115,6 @@ rt_lpm_set_hwaddr (rt_lpm_t *rt, rt_eth_addr_t hwaddr)
 extern void rt_lpm_table_init (void);
 extern int rt_lpm_sprintf (char *str, const rt_lpm_t *rt);
 extern void rt_lpm_dump (FILE *);
+void rt_lpm_gen_icmp_requests (void);
 
 #endif

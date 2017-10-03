@@ -27,7 +27,7 @@ rt_pkt_ipv4_local_process (rt_pkt_t pkt)
     char t0[32], t1[32];
     dbgmsg(WARN, pkt, "IPv4 LOCAL ignored"
         " (local: (%u) %s ; remote: %s ; protocol %u)",
-        pkt.pi->rdidx,
+        pkt.rdidx,
         rt_ipaddr_str(t0, ntohl(*PTR(pkt.pp.l3, uint32_t, 16))),
         rt_ipaddr_str(t1, ntohl(*PTR(pkt.pp.l3, uint32_t, 12))),
         proto);
@@ -35,44 +35,65 @@ rt_pkt_ipv4_local_process (rt_pkt_t pkt)
     rt_pkt_discard(pkt);
 }
 
-static inline void
-rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
+rt_lpm_t *
+rt_resolve_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t nhipa)
 {
-    const char *errmsg;
     /* Lookup route for the NextHop */
-    rt_lpm_t *nhr = rt_lpm_lookup(pkt.pi->rdidx, rt->nhipa);
+    rt_lpm_t *nhr = rt_lpm_lookup(rdidx, nhipa);
     if (nhr == NULL) {
-        errmsg = "no route for next-hop address";
-        goto NextHopError;
+        dbgmsg(WARN, nopkt, "No route for next-hop (%u) %s",
+            rdidx, rt_ipaddr_nr_str(nhipa));
+        return NULL;
     }
 
     uint32_t nh_flags = nhr->flags;
     if (nh_flags & RT_LPM_F_LOCAL) {
-        errmsg = "next-hop points at local address";
-        goto NextHopError;
+        dbgmsg(WARN, nopkt, "Next-hop (%u) %s points at local address ",
+            rdidx, rt_ipaddr_nr_str(nhipa));
+        return NULL;
     }
     if ((nh_flags & RT_LPM_F_HAS_NEXTHOP) || (nhr->nh != NULL)) {
-        errmsg = "nested next-hops not supported";
-        goto NextHopError;
+        dbgmsg(WARN, nopkt, "Nested next-hops not supported for (%u) %s",
+            rdidx, rt_ipaddr_nr_str(nhipa));
+        return NULL;
     }
     if (!(nh_flags & RT_LPM_F_HAS_PORTINFO)) {
-        errmsg = "next-hop missing port-info";
-        goto NextHopError;
+        dbgmsg(WARN, nopkt, "Next-hops (%u) %s is missing port-info",
+            rdidx, rt_ipaddr_nr_str(nhipa));
+        return NULL;
     }
 
     if (!rt_lpm_is_host_route(nhr)) {
         /* Create (or find) host route */
         rt_ipv4_prefix_t prefix;
-        prefix.addr = rt->nhipa;
+        prefix.addr = nhipa;
         prefix.len = 32;
-        nhr = rt_lpm_find_or_create(pkt.pi->rdidx, prefix, nhr->pi);
+        nhr = rt_lpm_find_or_create(rdidx, prefix, nhr->pi);
         nh_flags = nhr->flags;
+    }
+
+    if (!(nh_flags & RT_LPM_F_IS_NEXTHOP))
+        nhr->flags |= RT_LPM_F_IS_NEXTHOP;
+
+    dbgmsg(INFO, nopkt, "Resolved nexthop (%u) %s",
+        rdidx, rt_ipaddr_nr_str(nhipa));
+
+    return nhr;
+}
+
+static inline void
+rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
+{
+    rt_lpm_t *nhr = rt_resolve_nexthop(pkt.rdidx, rt->nhipa);
+    if (nhr == NULL) {
+        rt_pkt_discard(pkt);
+        return;
     }
 
     /* Set the Next Hop of the route */
     rt->nh = nhr;
 
-    if (!(nh_flags & RT_LPM_F_HAS_HWADDR)) {
+    if (!(nhr->flags & RT_LPM_F_HAS_HWADDR)) {
         rt_arp_generate(pkt, rt->nhipa, nhr);
         return;
     }
@@ -86,43 +107,41 @@ rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
     rt_pkt_set_hw_addrs(pkt, nhr->pi, nhr->hwaddr);
     /* Send Packet */
     rt_pkt_send(pkt, nhr->pi);
-
-    return;
-
-  NextHopError:
-    dbgmsg(WARN, pkt, "%s (%u) %s", errmsg, pkt.pi->rdidx,
-        rt_ipaddr_nr_str(rt->nhipa));
-    rt_pkt_discard(pkt);
-
 }
 
 void
-rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda)
+rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 {
-    rt_lpm_t *rt = rt_lpm_lookup(pkt.pi->rdidx, ipda);
+    rt_lpm_t *rt = rt_lpm_lookup(pkt.rdidx, ipda);
     if (rt == NULL) {
         /* No Route - Discard */
         dbgmsg(WARN, pkt, "IPv4 NO ROUTE for (%u) %s",
-            pkt.pi->rdidx, rt_ipaddr_nr_str(ipda));
+            pkt.rdidx, rt_ipaddr_nr_str(ipda));
         rt_stats_incr(1);
         rt_pkt_discard(pkt);
         return;
     }
 
-    uint32_t flags = rt->flags;
+    uint32_t rt_flags = rt->flags;
     rt_ipv4_addr_t nhipa = ipda;
 
-    if (flags & RT_LPM_F_LOCAL) {
+    if (rt_flags & RT_LPM_F_LOCAL) {
         rt_pkt_ipv4_local_process(pkt);
         return;
     }
 
+    if (flags & PKT_SEND_F_UPDATE_IPSA) {
+        rt_ipv4_hdr_t *ip = (rt_ipv4_hdr_t *) pkt.pp.l3;
+        ip->ipsa = htonl(rt->pi->ipaddr);
+        rt_pkt_ipv4_calc_chksum(ip);
+    }
+
     if (rt->nh != NULL) {
         rt = rt->nh;
-        flags = rt->flags;
+        rt_flags = rt->flags;
         nhipa = rt->prefix.addr;
     } else
-    if (flags & RT_LPM_F_HAS_NEXTHOP) {
+    if (rt_flags & RT_LPM_F_HAS_NEXTHOP) {
         nhipa = rt->nhipa;
         if (!(rt->flags & RT_LPM_F_HAS_HWADDR)) {
             rt_pkt_nh_resolve(pkt, rt, ipda);
@@ -130,7 +149,7 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda)
         }
     }
 
-    if (flags & RT_LPM_F_HAS_HWADDR) {
+    if (rt_flags & RT_LPM_F_HAS_HWADDR) {
         /* Add a Direct Table entry */
         rt_dt_create(rt, ipda);
         /* Update MAC addresses and send */
@@ -146,7 +165,7 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
 {
     rt_ipv4_addr_t ipda = ntohl(*PTR(pkt.pp.l3, uint32_t, 16));
     /* Look-up in Direct (fast) Table */
-    rt_dt_route_t *drp = rt_dt_lookup(pkt.pi->rdidx, ipda);
+    rt_dt_route_t *drp = rt_dt_lookup(pkt.rdidx, ipda);
     if (drp != NULL) {
         /* Update MAC addresses */
         memcpy(&pkt.eth->dst, drp->eth.dst, 6);
@@ -164,7 +183,7 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
 
     dbgmsg(WARN, pkt, "IPv4 Slow Path");
 
-    rt_pkt_ipv4_send(pkt, ipda);
+    rt_pkt_ipv4_send(pkt, ipda, 0);
 }
 
 void
@@ -172,6 +191,7 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
 {
     rt_pkt_t pkt;
     pkt.pi = rt_port_lookup(port);
+    pkt.rdidx = pkt.pi->rdidx;
     pkt.mbuf = mbuf;
     pkt.eth = rte_pktmbuf_mtod(mbuf, void *);
 
