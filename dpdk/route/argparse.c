@@ -44,6 +44,8 @@ parse_iface_addr (const char *arg)
         argstr = &numch[1];
         rt_port_set_routing_domain(port, rdidx);
     }
+    if (strlen(argstr) == 0)
+        return 0;
     /* Parse Prefix Length */
     char *slash = index(argstr, '/');
     if (slash != NULL) {
@@ -102,11 +104,17 @@ parse_ipv4_route (const char *arg)
             " IP address '%s'.\n", arg);
         return -1;
     }
-    rc = inet_pton(AF_INET, &at[1], &nhipa);
-    if (rc != 1) {
-        fprintf(stderr, "ERROR: could not parse next-hop"
-            " IP address '%s'.\n", arg);
-        return -1;
+    if ((strcasecmp(&at[1], "drop") == 0) ||
+        (strcasecmp(&at[1], "discard") == 0) ||
+        (strcasecmp(&at[1], "blackhole") == 0)) {
+        nhipa = 0; /* Blackhole */
+    } else {
+        rc = inet_pton(AF_INET, &at[1], &nhipa);
+        if (rc != 1) {
+            fprintf(stderr, "ERROR: could not parse next-hop"
+                " IP address '%s'.\n", arg);
+            return -1;
+        }
     }
 
     rt_lpm_route_create(rdidx, ntohl(ipaddr), plen, ntohl(nhipa));

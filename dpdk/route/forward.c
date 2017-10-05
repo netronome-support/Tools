@@ -101,7 +101,7 @@ rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
     dbgmsg(INFO, pkt, "forwarding - next-hop already resolved");
 
     /* All information available. Create DT entry */
-    rt_dt_create(nhr, ipda);
+    rt_dt_create(pkt.rdidx, ipda, nhr, 0);
 
     /* Update MAC addresses */
     rt_pkt_set_hw_addrs(pkt, nhr->pi, nhr->hwaddr);
@@ -112,12 +112,12 @@ rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
 void
 rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 {
-    rt_lpm_t *rt = rt_lpm_lookup(pkt.rdidx, ipda);
+    rt_rd_t rdidx = pkt.rdidx;
+    rt_lpm_t *rt = rt_lpm_lookup(rdidx, ipda);
     if (rt == NULL) {
         /* No Route - Discard */
         dbgmsg(WARN, pkt, "IPv4 NO ROUTE for (%u) %s",
-            pkt.rdidx, rt_ipaddr_nr_str(ipda));
-        rt_stats_incr(1);
+            rdidx, rt_ipaddr_nr_str(ipda));
         rt_pkt_discard(pkt);
         return;
     }
@@ -151,7 +151,7 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 
     if (rt_flags & RT_LPM_F_HAS_HWADDR) {
         /* Add a Direct Table entry */
-        rt_dt_create(rt, ipda);
+        rt_dt_create(rdidx, ipda, rt, 0);
         /* Update MAC addresses and send */
         rt_pkt_set_hw_addrs(pkt, rt->pi, rt->hwaddr);
         rt_pkt_send(pkt, rt->pi);

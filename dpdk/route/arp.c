@@ -98,7 +98,7 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
     rt_lpm_set_hwaddr(rt, hwaddr);
     rt_arp_flush_packet(rt);
 
-    rt_dt_create(rt, ipaddr);
+    rt_dt_create(pkt.rdidx, ipaddr, rt, 0);
 }
 
 static inline void
@@ -168,7 +168,7 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
     rt_lpm_set_hwaddr(rt, ap.s_hw_addr);
     rt_arp_flush_packet(rt);
 
-    rt_dt_create(rt, ap.s_ip_addr);
+    rt_dt_create(rdidx, ap.s_ip_addr, rt, 0);
     rt_pkt_discard(pkt);
 }
 

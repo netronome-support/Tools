@@ -16,6 +16,7 @@ typedef struct rt_dt_route_s {
   rt_ipv4_addr_t ipaddr;
   rt_rd_t rdidx;
   rt_port_index_t port;
+  uint8_t flags;
   void *tx_buffer;
   struct {
     rt_eth_addr_t *dst;
@@ -23,6 +24,10 @@ typedef struct rt_dt_route_s {
   } eth;
   rt_cnt_idx_t cntidx;
 } rt_dt_route_t;
+
+#define RT_DT_F_LOCAL           (1 << 0)
+#define RT_DT_F_DISCARD         (1 << 1)
+
 
 /* Linear List of Route Data Entries */
 typedef struct rt_lpm_s {
@@ -44,6 +49,7 @@ typedef struct rt_lpm_s {
 #define RT_LPM_F_HAS_NEXTHOP    (1 << 3)
 #define RT_LPM_F_HAS_PORTINFO   (1 << 4)
 #define RT_LPM_F_IS_NEXTHOP     (1 << 5)
+#define RT_LPM_F_DISCARD        (1 << 6)
 
 #define RT_DT_SIZE 1023
 extern rt_dt_route_t dt[RT_DT_SIZE];
@@ -75,7 +81,8 @@ rt_dt_lookup (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr)
 }
 
 rt_dt_route_t *rt_dt_lookup (rt_rd_t vifidx, rt_ipv4_addr_t addr);
-extern void rt_dt_create (rt_lpm_t *, rt_ipv4_addr_t addr);
+extern void rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t addr,
+    rt_lpm_t *, uint8_t flags);
 extern void rt_dt_init (void);
 extern int rt_dt_sprintf (char *str, const rt_dt_route_t *dt);
 extern void rt_dt_dump (FILE *fd);

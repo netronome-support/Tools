@@ -13,12 +13,12 @@ rt_dt_route_t dt[RT_DT_SIZE];
 
 static sem_t rt_dt_lock;
 
-void rt_dt_create (rt_lpm_t *rt, rt_ipv4_addr_t ipaddr)
+void rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
+    rt_lpm_t *rt, uint8_t flags)
 {
     assert(rt != NULL);
     rt_port_info_t *pi = rt->pi;
     assert(pi != NULL);
-    rt_rd_t rdidx = pi->rdidx;
     assert(rt->pi->tx_buffer != NULL);
 
     uint32_t idx = rt_dt_hash(rdidx, ipaddr);
@@ -46,12 +46,13 @@ void rt_dt_create (rt_lpm_t *rt, rt_ipv4_addr_t ipaddr)
         hd->prev = np;
     }
     /* Copy route information from LPM entry */
-    np->rdidx   = rdidx;
     np->port    = pi->idx;
+    np->flags   = flags;
     np->tx_buffer = pi->tx_buffer;
     np->eth.dst = &rt->hwaddr;
     memcpy(&np->eth.src, &pi->hwaddr, 6);
     /* Copy the IP address last */
+    np->rdidx = rdidx;
     np->ipaddr = ipaddr;
 
     sem_post(&rt_dt_lock);
