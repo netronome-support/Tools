@@ -23,5 +23,6 @@ void rt_dhcp_discover (void);
 
 int parse_iface_addr (const char *arg);
 int parse_ipv4_route (const char *arg);
+int port_set_promisc_flag (const char *arg);
 
 #endif

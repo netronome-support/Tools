@@ -126,3 +126,17 @@ parse_ipv4_route (const char *arg)
 
     return 0;
 }
+
+int
+port_set_promisc_flag (const char *argstr)
+{
+    int prtidx = strtol(argstr, NULL, 10);
+    if (prtidx >= RT_PORT_MAX) {
+        fprintf(stderr, "ERROR: port index (%d) out of range\n",
+            prtidx);
+        return -1;
+    }
+    rt_port_info_t *pi = rt_port_lookup(prtidx);
+    pi->flags |= RT_PORT_F_PROMISC;
+    return 0;
+}

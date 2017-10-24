@@ -181,7 +181,11 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
         return;
     }
 
-    dbgmsg(WARN, pkt, "IPv4 Slow Path");
+    char t0[32], t1[32];
+    rt_ipv4_addr_t ipsa = ntohl(*PTR(pkt.pp.l3, uint32_t, 12));
+    dbgmsg(WARN, pkt, "IPv4 Slow Path (%u) %s -> %s", pkt.rdidx,
+        rt_ipaddr_str(t0, ipsa),
+        rt_ipaddr_str(t1, ipda));
 
     rt_pkt_ipv4_send(pkt, ipda, 0);
 }
@@ -200,32 +204,33 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
     pkt.pp.l3 = PTR(pkt.eth, void, 14);
 
     /* Compare Destination MAC address */
-    if (rt_eth_addr_compare(&pkt.eth->dst, &pkt.pi->hwaddr)) {
-        /* Check for IPv4 */
-        if (ethtype == 0x0800) {
-            rt_pkt_ipv4_process(pkt);
-            return;
-        } else
-        if (ethtype == 0x0806) {
-            rt_arp_process(pkt);
-            return;
+    if ((pkt.eth->dst[0] & 1) == 0) {
+        /* Unicast */
+        if (rt_eth_addr_compare(&pkt.eth->dst, &pkt.pi->hwaddr)
+                || (pkt.pi->flags & RT_PORT_F_PROMISC)) {
+            /* Check for IPv4 */
+            if (ethtype == 0x0800) {
+                rt_pkt_ipv4_process(pkt);
+                return;
+            } else
+            if (ethtype == 0x0806) {
+                rt_arp_process(pkt);
+                return;
+            }
+            //dbgmsg(WARN, pkt, "unsupported ETHTYPE");
+        } else {
+            dbgmsg(WARN, pkt, "wrong destination MAC");
         }
-        //dbgmsg(WARN, pkt, "unsupported ETHTYPE");
-    } else
-    if (pkt.eth->dst[0] & 1) { /* Broadcast or Multicast */
-        if (ethtype == 0x0800) {
-            rt_pkt_ipv4_process(pkt);
-            return;
-        } else
-        if (ethtype == 0x0806) {
-            rt_arp_process(pkt);
-            return;
-        }
-        rt_stats_incr(1);
-        //dbgmsg(WARN, pkt, "unsupported ETHTYPE (multicast)");
     } else {
-        rt_stats_incr(1);
-        dbgmsg(WARN, pkt, "wrong destination MAC");
+        /* Broadcast or Multicast */
+        if (ethtype == 0x0800) {
+            rt_pkt_ipv4_process(pkt);
+            return;
+        } else
+        if (ethtype == 0x0806) {
+            rt_arp_process(pkt);
+            return;
+        }
     }
     rt_pkt_discard(pkt);
 }

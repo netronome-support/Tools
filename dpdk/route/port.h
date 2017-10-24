@@ -23,6 +23,7 @@ typedef struct {
 typedef struct {
   rt_port_index_t   idx;
   rt_rd_t           rdidx;
+  uint8_t           flags;
   rt_eth_addr_t     hwaddr;
   rt_ipv4_prefix_t  prefix;
   rt_ipv4_addr_t    ipaddr;
@@ -30,6 +31,9 @@ typedef struct {
   rt_cnt_idx_t      cntidx;
   rt_dhcp_info_t    dhcpinfo;
 } rt_port_info_t;
+
+#define RT_PORT_F_EXIST         (1 << 0)
+#define RT_PORT_F_PROMISC       (1 << 1)
 
 #define RT_PORT_MAX 128
 extern rt_port_info_t rt_port_table[RT_PORT_MAX];

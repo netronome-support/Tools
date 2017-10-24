@@ -12,6 +12,7 @@ rt_port_create (rt_port_index_t port, void *hwaddr, void *tx_buffer)
 {
     rt_port_info_t *pi = rt_port_lookup(port);
     assert(tx_buffer != NULL);
+    pi->flags |= RT_PORT_F_EXIST;
     pi->idx = port;
     memcpy(&pi->hwaddr, hwaddr, 6);
     pi->tx_buffer = tx_buffer;
