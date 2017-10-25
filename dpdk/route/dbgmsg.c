@@ -10,6 +10,8 @@
 FILE *rt_log_fd = NULL;
 rt_pkt_t nopkt;
 
+dbgmsg_globals_t dbgmsg_globals;
+
 static float dbg_speed_factor = 0.0;
 
 static inline float
@@ -33,7 +35,7 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
     if (rt_log_fd == NULL)
         return;
 
-    if (level == DEBUG)
+    if (level > dbgmsg_globals.log_level)
         return;
 
     float credits = dbg_calc_credits(dbgstate);
@@ -51,6 +53,7 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
         case DEBUG:  lvlstr = "D"; break;
         case INFO:   lvlstr = "I"; break;
         case WARN:   lvlstr = "W"; break;
+        case CONF:   lvlstr = "C"; break;
         case ERROR:  lvlstr = "E"; break;
         default:     lvlstr = "?"; break;
     }
@@ -69,8 +72,7 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
 
     n += sprintf(&str[n], "\n");
 
-/*
-    if (pkt.mbuf != NULL) {
+    if ((pkt.mbuf != NULL) && (dbgmsg_globals.log_packets)) {
         n += sprintf(&str[n], "-  %18p  ", pkt.mbuf);
         int i;
         uint8_t *ba = (uint8_t *) pkt.eth;
@@ -79,7 +81,6 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
             n += sprintf(&str[n], " %02x", ba[i]);
         n += sprintf(&str[n], "\n");
     }
-*/
 
     fprintf(rt_log_fd, "%s", str);
     fflush(rt_log_fd);
@@ -98,6 +99,8 @@ void dbgmsg_init (void)
     nopkt.mbuf = NULL;
     nopkt.pi = NULL;
     dbg_speed_factor =  1.0 / (float) rte_get_tsc_hz();
+    dbgmsg_globals.log_level = INFO;
+    dbgmsg_globals.log_packets = 0;
 }
 
 int dbgmsg_fopen (const char *fname)

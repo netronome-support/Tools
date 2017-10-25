@@ -34,10 +34,31 @@ Command Line Arguments (beyond what l2fwd supports):
 
     This adds a route to the specified (or default) routing domain.
 
+ --static [<route domain>#]<next hop IPv4 addr>@<MAC address>
+
+    Add static ARP entry.
+
+ --ping-nexthops
+
+    Regularly (once per second) ping all route nexthops.
+
+ --no-statistics
+
+    Do not print statistics to standard output.
+
  --log-file <file name>
 
     Log packet events to specified file. Note that this file grows
     indefinitely and may fill up the file system.
+
+ --log-level <integer>
+
+    Do not print message above log level.
+    (ERROR: 1, WARN: 2, INFO: 3, DEBUG: 4)
+
+ --log-packet
+
+    Dump the start of each packet in hexadecimal into the log.    
 
 Limitations:
 

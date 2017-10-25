@@ -8,6 +8,13 @@
 #include "pktutils.h"
 
 typedef struct {
+    int log_level;
+    int log_packets;
+} dbgmsg_globals_t;
+
+extern dbgmsg_globals_t dbgmsg_globals;
+
+typedef struct {
     uint64_t last;
     int suppressed;
     float credits;
@@ -59,8 +66,9 @@ extern int dbgmsg_fopen (const char *fname);
 extern void dbgmsg_close (void);
 
 #define ERROR   1
-#define WARN    2
-#define INFO    3
-#define DEBUG   4
+#define CONF    2
+#define WARN    3
+#define INFO    4
+#define DEBUG   5
 
 #endif

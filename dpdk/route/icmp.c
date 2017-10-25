@@ -110,6 +110,6 @@ void rt_icmp_process (rt_pkt_t pkt)
         rt_icmp_proc_reply(pkt, icmp);
         return;
     }
-    dbgmsg(INFO, pkt, "ICMP ignoring packet");
+    dbgmsg(DEBUG, pkt, "ICMP ignoring packet");
     rt_pkt_discard(pkt);
 }

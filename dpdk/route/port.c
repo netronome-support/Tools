@@ -43,7 +43,7 @@ rt_port_set_ipv4_addr (rt_port_index_t port, rt_ipv4_addr_t ipaddr, int len)
     /* Add a LOCAL route to the LPM for the IP address */
     rt_lpm_host_create(pi->rdidx, ipaddr, pi, RT_LPM_F_LOCAL);
 
-    dbgmsg(INFO, nopkt, "Port %d IP address (%d): %s/%u",
+    dbgmsg(CONF, nopkt, "Port %d IP address (%d): %s/%u",
         port, pi->rdidx, rt_ipaddr_nr_str(ipaddr), len);
 }
 

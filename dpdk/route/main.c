@@ -448,6 +448,8 @@ rt_parse_args(int argc, char **argv)
                 { "log-file", required_argument, NULL, 1003},
                 { "promisc", required_argument, NULL, 1004},
                 { "static", required_argument, NULL, 1005},
+                { "log-level", required_argument, NULL, 1006},
+                { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
                 { "no-statistics", no_argument, &print_statistics, 0},
                 { "ping-nexthops", no_argument, &ping_nexthops, 1},
 		{ NULL, 0, 0, 0}
@@ -518,6 +520,10 @@ rt_parse_args(int argc, char **argv)
                         ret = add_static_arp_entry(optarg);
                         if (ret < 0)
                             return -1;
+                        break;
+
+                case 1006: /* --log-level */
+                        dbgmsg_globals.log_level = strtol(optarg, NULL, 10);
                         break;
 
 		/* long options */

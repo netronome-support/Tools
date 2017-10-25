@@ -91,7 +91,7 @@ rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
     }
 
     if (!(nhr->pi->flags & RT_PORT_F_EXIST)) {
-        dbgmsg(INFO, pkt, "port not enabled (%u)", nhr->pi->idx);
+        dbgmsg(WARN, pkt, "port not enabled (%u)", nhr->pi->idx);
         rt_pkt_discard(pkt);
         return;
     }
@@ -189,7 +189,7 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
 
     char t0[32], t1[32];
     rt_ipv4_addr_t ipsa = ntohl(*PTR(pkt.pp.l3, uint32_t, 12));
-    dbgmsg(INFO, pkt, "IPv4 Slow Path (%u) %s -> %s", pkt.rdidx,
+    dbgmsg(DEBUG, pkt, "IPv4 Slow Path (%u) %s -> %s", pkt.rdidx,
         rt_ipaddr_str(t0, ipsa),
         rt_ipaddr_str(t1, ipda));
 
@@ -223,9 +223,11 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
                 rt_arp_process(pkt);
                 return;
             }
-            //dbgmsg(WARN, pkt, "unsupported ETHTYPE");
+            dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
+                ethtype);
         } else {
-            dbgmsg(WARN, pkt, "wrong destination MAC");
+            dbgmsg(DEBUG, pkt, "wrong destination MAC %s",
+                rt_hwaddr_str(pkt.eth->dst));
         }
     } else {
         /* Broadcast or Multicast */
@@ -237,6 +239,8 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
             rt_arp_process(pkt);
             return;
         }
+        dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
+            ethtype);
     }
     rt_pkt_discard(pkt);
 }

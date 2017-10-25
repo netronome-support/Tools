@@ -91,7 +91,7 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
         rt = rt_lpm_host_create(pkt.rdidx, ipaddr, pi, 0);
     } 
 
-    dbgmsg(INFO, nopkt, "ARP learned (%u) %s : %s",
+    dbgmsg(CONF, nopkt, "ARP learned (%u) %s : %s",
        pkt.rdidx, rt_ipaddr_nr_str(ipaddr),
        rt_hwaddr_str(hwaddr));
 

@@ -120,7 +120,7 @@ parse_ipv4_route (const char *arg)
     rt_lpm_route_create(rdidx, ntohl(ipaddr), plen, ntohl(nhipa));
 
     char t0[32], t1[32];
-    dbgmsg(INFO, nopkt, "Route (%u) %s/%u -> %s", rdidx,
+    dbgmsg(CONF, nopkt, "Route (%u) %s/%u -> %s", rdidx,
         rt_ipaddr_str(t0, ntohl(ipaddr)), plen,
         rt_ipaddr_str(t1, ntohl(nhipa)));
 
@@ -224,7 +224,7 @@ add_static_arp_entry (const char *argstr)
     }
     memcpy(rt->hwaddr, hwaddr, 6);
     rt->flags |= RT_LPM_F_HAS_HWADDR;
-    dbgmsg(INFO, nopkt, "Static ARP Entry (%u) %s -> %s", rdidx,
+    dbgmsg(CONF, nopkt, "Static ARP Entry (%u) %s -> %s", rdidx,
         rt_ipaddr_nr_str(nhipa), rt_hwaddr_str(hwaddr));
     return 0;
 }

@@ -214,7 +214,7 @@ rt_dhcp_process (rt_pkt_t pkt)
             break;
         case 5: /* DHCP ACK */
             info->state = 5;
-            dbgmsg(INFO, pkt, "DHCP ACK received (%s/%u)",
+            dbgmsg(CONF, pkt, "DHCP ACK received (%s/%u)",
                 rt_ipaddr_nr_str(l_ipaddr), opts.plen);
             rt_port_set_ipv4_addr(pi->idx, l_ipaddr, opts.plen);
             break;
