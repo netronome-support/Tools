@@ -140,3 +140,91 @@ port_set_promisc_flag (const char *argstr)
     pi->flags |= RT_PORT_F_PROMISC;
     return 0;
 }
+
+static int
+parse_hwaddr (const char *str, uint8_t *hwaddr)
+{
+    memset(hwaddr, 0, 6);
+    int ch;
+    int dc = 0; // Digit Count
+    int bi = 0; // Byte Index
+    while ((ch = *str++)) {
+        if (ch == ':') {
+            if (dc == 0)
+                return -1;
+            dc = 0;
+            bi++;
+            if (bi == 6)
+                return -1;
+        } else
+        if (isdigit(ch)) {
+            if (dc == 2)
+                return -1;
+            int value = (isdigit(ch))
+                ? (ch - '0')
+                : (tolower(ch) - 'a' + 10);
+            hwaddr[bi] = 16 * hwaddr[bi] + value;
+            dc++;
+        } else {
+            return -1;
+        }
+    }
+    if ((bi != 5) || (dc == 0))
+        return -1;
+    return 0;
+}
+
+int
+add_static_arp_entry (const char *argstr)
+{
+    /* Format: [<rdidx>#]<IPv4 addr>@<next hop MAC addr> */
+    char tmpstr[128];
+    int rc;
+    strncpy(tmpstr, argstr, 127);
+    argstr = tmpstr;
+    int rdidx = RT_RD_DEFAULT;
+    char *at    = index(tmpstr, '@');
+    char *numch = index(tmpstr, '#');
+    if (at == NULL) {
+        fprintf(stderr, "missing '@' delimiter");
+        return -1;
+    }
+    if (numch != NULL) {
+        *numch = 0;
+        char *endptr;
+        rdidx = strtol(argstr, &endptr, 10);
+        if ((endptr != numch) || (rdidx == 0)) {
+            fprintf(stderr, "ERROR: could not parse routing domain index\n");
+            return -1;
+        }
+        argstr = &numch[1];
+    }
+    *at = 0;
+    rt_ipv4_addr_t nhipa;
+    rc = inet_pton(AF_INET, argstr, &nhipa);
+    if (rc != 1) {
+        fprintf(stderr, "ERROR: could not parse route"
+            " IP address '%s'\n", argstr);
+        return -1;
+    }
+    nhipa = ntohl(nhipa);
+    argstr = &at[1];
+    rt_eth_addr_t hwaddr;
+    rc = parse_hwaddr(argstr, hwaddr);
+    if (rc) {
+        fprintf(stderr, "ERROR: could not parse MAC address '%s'\n",
+            argstr);
+        return -1;
+    }
+    rt_lpm_t *rt = rt_lpm_add_nexthop(rdidx, nhipa);
+    if (rt == NULL) {
+        fprintf(stderr, "ERROR: no route for (%u) %s\n",
+            rdidx, rt_ipaddr_nr_str(nhipa));
+        return -1;
+    }
+    memcpy(rt->hwaddr, hwaddr, 6);
+    rt->flags |= RT_LPM_F_HAS_HWADDR;
+    dbgmsg(INFO, nopkt, "Static ARP Entry (%u) %s -> %s", rdidx,
+        rt_ipaddr_nr_str(nhipa), rt_hwaddr_str(hwaddr));
+    return 0;
+}

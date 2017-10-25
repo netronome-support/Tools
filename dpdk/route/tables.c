@@ -13,7 +13,8 @@ rt_dt_route_t dt[RT_DT_SIZE];
 
 static sem_t rt_dt_lock;
 
-void rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
+void
+rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
     rt_lpm_t *rt, uint8_t flags)
 {
     assert(rt != NULL);
@@ -62,7 +63,8 @@ void rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
     }
 }
 
-void rt_dt_init (void)
+void
+rt_dt_init (void)
 {
     int i;
     for (i = 0 ; i < RT_DT_SIZE ; i++) {
@@ -179,6 +181,21 @@ rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
     rt->nhipa = nhipa;
     rt->flags |= RT_LPM_F_HAS_NEXTHOP;
     return rt;
+}
+
+rt_lpm_t *
+rt_lpm_add_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr)
+{
+    rt_lpm_t *rt = rt_lpm_lookup(rdidx, ipaddr);
+    if (rt == NULL) {
+        fprintf(stderr, "ERROR: no route for (%u) %s\n",
+            rdidx, rt_ipaddr_nr_str(ipaddr));
+        return NULL;
+    }
+    rt_ipv4_prefix_t prefix;
+    prefix.addr = ipaddr;
+    prefix.len = 32;
+    return rt_lpm_find_or_create(rdidx, prefix, rt->pi);
 }
 
 void

@@ -447,6 +447,7 @@ rt_parse_args(int argc, char **argv)
                 { "route", required_argument, NULL, 1002},
                 { "log-file", required_argument, NULL, 1003},
                 { "promisc", required_argument, NULL, 1004},
+                { "static", required_argument, NULL, 1005},
                 { "no-statistics", no_argument, &print_statistics, 0},
                 { "ping-nexthops", no_argument, &ping_nexthops, 1},
 		{ NULL, 0, 0, 0}
@@ -509,6 +510,12 @@ rt_parse_args(int argc, char **argv)
 
                 case 1004:
                         ret = port_set_promisc_flag(optarg);
+                        if (ret < 0)
+                            return -1;
+                        break;
+
+                case 1005:
+                        ret = add_static_arp_entry(optarg);
                         if (ret < 0)
                             return -1;
                         break;

@@ -58,8 +58,9 @@ extern void dbgmsg_init (void);
 extern int dbgmsg_fopen (const char *fname);
 extern void dbgmsg_close (void);
 
-#define INFO    1
+#define ERROR   1
 #define WARN    2
-#define ERROR   3
+#define INFO    3
+#define DEBUG   4
 
 #endif

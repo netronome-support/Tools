@@ -33,6 +33,9 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
     if (rt_log_fd == NULL)
         return;
 
+    if (level == DEBUG)
+        return;
+
     float credits = dbg_calc_credits(dbgstate);
     
     if (credits < 0.0) {
@@ -45,6 +48,7 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
 
     const char *lvlstr;
     switch (level) {
+        case DEBUG:  lvlstr = "D"; break;
         case INFO:   lvlstr = "I"; break;
         case WARN:   lvlstr = "W"; break;
         case ERROR:  lvlstr = "E"; break;
@@ -65,6 +69,7 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
 
     n += sprintf(&str[n], "\n");
 
+/*
     if (pkt.mbuf != NULL) {
         n += sprintf(&str[n], "-  %18p  ", pkt.mbuf);
         int i;
@@ -74,6 +79,7 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
             n += sprintf(&str[n], " %02x", ba[i]);
         n += sprintf(&str[n], "\n");
     }
+*/
 
     fprintf(rt_log_fd, "%s", str);
     fflush(rt_log_fd);

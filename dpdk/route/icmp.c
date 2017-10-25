@@ -47,6 +47,20 @@ rt_icmp_request (rt_pkt_t pkt, void *icmp)
     rt_pkt_ipv4_send(pkt, ntohl(ripa), 0);
 }
 
+static void
+rt_icmp_proc_reply (rt_pkt_t pkt, __attribute__((unused)) void *icmp)
+{
+    char t0[32], t1[32];
+    rt_ipv4_addr_t ipsa = ntohl(*PTR(pkt.pp.l3, uint32_t, 12));
+    rt_ipv4_addr_t ipda = ntohl(*PTR(pkt.pp.l3, uint32_t, 16));
+    dbgmsg(INFO, pkt, "ICMP Reply from (%u) %s to local address %s",
+        pkt.rdidx,
+        rt_ipaddr_str(t0, ipsa),
+        rt_ipaddr_str(t1, ipda));
+    rt_pkt_discard(pkt);
+    return;
+}
+
 void rt_icmp_gen_request (rt_rd_t rdidx, rt_ipv4_addr_t ipda)
 {
     static uint16_t ping_seq = 1;
@@ -93,8 +107,7 @@ void rt_icmp_process (rt_pkt_t pkt)
         return;
     }
     if (type == 0) {
-        dbgmsg(INFO, pkt, "ICMP reply");
-        rt_pkt_discard(pkt);
+        rt_icmp_proc_reply(pkt, icmp);
         return;
     }
     dbgmsg(INFO, pkt, "ICMP ignoring packet");

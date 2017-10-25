@@ -28,7 +28,6 @@ typedef struct rt_dt_route_s {
 #define RT_DT_F_LOCAL           (1 << 0)
 #define RT_DT_F_DISCARD         (1 << 1)
 
-
 /* Linear List of Route Data Entries */
 typedef struct rt_lpm_s {
   struct rt_lpm_s *prev, *next;
@@ -92,6 +91,7 @@ rt_lpm_t *rt_lpm_find_or_create (rt_rd_t rdidx,
     rt_ipv4_prefix_t prefix, rt_port_info_t *pi);
 rt_lpm_t *rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
     rt_ipv4_addr_t nhipa);
+rt_lpm_t *rt_lpm_add_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr);
 
 static inline rt_lpm_t *
 rt_lpm_host_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,

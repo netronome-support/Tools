@@ -90,6 +90,12 @@ rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
         return;
     }
 
+    if (!(nhr->pi->flags & RT_PORT_F_EXIST)) {
+        dbgmsg(INFO, pkt, "port not enabled (%u)", nhr->pi->idx);
+        rt_pkt_discard(pkt);
+        return;
+    }
+
     /* Set the Next Hop of the route */
     rt->nh = nhr;
 
@@ -183,7 +189,7 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
 
     char t0[32], t1[32];
     rt_ipv4_addr_t ipsa = ntohl(*PTR(pkt.pp.l3, uint32_t, 12));
-    dbgmsg(WARN, pkt, "IPv4 Slow Path (%u) %s -> %s", pkt.rdidx,
+    dbgmsg(INFO, pkt, "IPv4 Slow Path (%u) %s -> %s", pkt.rdidx,
         rt_ipaddr_str(t0, ipsa),
         rt_ipaddr_str(t1, ipda));
 

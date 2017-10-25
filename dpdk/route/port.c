@@ -58,8 +58,10 @@ rt_port_set_ip_addr (rt_port_index_t port, const char *str, int len)
 void
 rt_port_table_init (void)
 {
-    int i;
-    for (i = 0 ; i < RT_PORT_MAX ; i++) {
-        memset(&rt_port_table[i], 0, sizeof(rt_port_info_t));
+    int prtidx;
+    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+        memset(&rt_port_table[prtidx], 0, sizeof(rt_port_info_t));
+        rt_port_info_t *pi = rt_port_lookup(prtidx);
+        pi->idx = prtidx;
     }
 }

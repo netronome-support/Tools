@@ -108,7 +108,7 @@ rt_arp_request_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
     /* Check Target IP Address */
     if (ap.t_ip_addr != pi->ipaddr) {
         char t0[32], t1[32];
-        dbgmsg(INFO, pkt, "ARP request not for this port"
+        dbgmsg(DEBUG, pkt, "ARP request not for this port"
             " (req: %s, port(%d): %s)",
             rt_ipaddr_str(t0, ap.t_ip_addr), pi->idx,
             rt_ipaddr_str(t1, pi->ipaddr));
