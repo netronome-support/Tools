@@ -74,6 +74,7 @@
 #include "functions.h"
 #include "pktutils.h"
 #include "dbgmsg.h"
+#include "rings.h"
 
 static volatile bool force_quit;
 
@@ -104,10 +105,9 @@ static struct ether_addr rt_ports_eth_addr[RTE_MAX_ETHPORTS];
 /* mask of enabled ports */
 static uint32_t rt_enabled_port_mask = 0;
 
-/* list of enabled ports */
-static uint32_t rt_dst_ports[RTE_MAX_ETHPORTS];
-
 static unsigned int rt_rx_queue_per_lcore = 1;
+
+tx_ring_set_t *grs = NULL;
 
 #define MAX_RX_QUEUE_PER_LCORE 16
 #define MAX_TX_QUEUE_PER_PORT 16
@@ -258,14 +258,12 @@ rt_main_loop(void)
 {
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_mbuf *m;
-    int sent;
     unsigned lcore_id;
     uint64_t prev_tsc, diff_tsc, cur_tsc, timer_tsc;
     unsigned i, j, portid, nb_rx;
     struct lcore_queue_conf *qconf;
     const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
             BURST_TX_DRAIN_US;
-    struct rte_eth_dev_tx_buffer *buffer;
 
     prev_tsc = 0;
     timer_tsc = 0;
@@ -273,7 +271,10 @@ rt_main_loop(void)
     lcore_id = rte_lcore_id();
     qconf = &lcore_queue_conf[lcore_id];
 
-    if (qconf->n_rx_port == 0) {
+    tx_queue_set_t *qs = create_queue_set(grs);
+    tx_ring_set_t *trs = create_thread_ring_set(grs);
+
+    if ((qconf->n_rx_port == 0) && (trs->count == 0)) {
         RTE_LOG(INFO, ROUTE, "lcore %u has nothing to do\n", lcore_id);
         return;
     }
@@ -298,17 +299,6 @@ rt_main_loop(void)
         diff_tsc = cur_tsc - prev_tsc;
         if (unlikely(diff_tsc > drain_tsc)) {
 
-            for (i = 0; i < qconf->n_rx_port; i++) {
-
-                portid = rt_dst_ports[qconf->rx_port_list[i]];
-                buffer = tx_buffer[portid];
-
-                sent = rte_eth_tx_buffer_flush(portid, 0, buffer);
-                if (sent)
-                    port_statistics[portid].tx += sent;
-
-            }
-
             /* if timer is enabled */
             if (timer_period > 0) {
 
@@ -325,8 +315,8 @@ rt_main_loop(void)
                         if (print_statistics) {
                             print_stats();
                         }
-                            if (ping_nexthops) {
-                                rt_lpm_gen_icmp_requests();
+                        if (ping_nexthops) {
+                            rt_lpm_gen_icmp_requests();
                         }
 
                         /* reset the timer */
@@ -358,6 +348,10 @@ rt_main_loop(void)
                 rt_pkt_process(portid, m);
             }
         }
+
+        tx_queue_flush_all(qs);
+
+        flush_thread_ring_set(trs);
     }
 }
 
@@ -620,7 +614,7 @@ main(int argc, char **argv)
     int ret;
     uint8_t nb_ports;
     uint8_t nb_ports_available;
-    uint8_t portid, last_port;
+    uint8_t portid;
     unsigned lcore_id, rx_lcore_id;
     unsigned nb_ports_in_mask = 0;
 
@@ -652,11 +646,6 @@ main(int argc, char **argv)
     if (nb_ports == 0)
         rte_exit(EXIT_FAILURE, "No Ethernet ports - bye\n");
 
-    /* reset rt_dst_ports */
-    for (portid = 0; portid < RTE_MAX_ETHPORTS; portid++)
-        rt_dst_ports[portid] = 0;
-    last_port = 0;
-
     /*
      * Each logical core is assigned a dedicated TX queue on each port.
      */
@@ -665,20 +654,9 @@ main(int argc, char **argv)
         if ((rt_enabled_port_mask & (1 << portid)) == 0)
             continue;
 
-        if (nb_ports_in_mask % 2) {
-            rt_dst_ports[portid] = last_port;
-            rt_dst_ports[last_port] = portid;
-        }
-        else
-            last_port = portid;
-
         nb_ports_in_mask++;
 
         rte_eth_dev_info_get(portid, &dev_info);
-    }
-    if (nb_ports_in_mask % 2) {
-        printf("Notice: odd number of ports in portmask.\n");
-        rt_dst_ports[last_port] = last_port;
     }
 
     int nb_mbuf = nb_ports_in_mask * (nb_rxd + nb_txd)
@@ -719,6 +697,9 @@ main(int argc, char **argv)
     }
 
     nb_ports_available = nb_ports;
+
+    grs = create_global_ring_set(nb_ports);
+    global_ring_default_assign(grs, nb_ports, rt_enabled_port_mask);
 
     /* Initialise each port */
     for (portid = 0; portid < nb_ports; portid++) {
@@ -780,20 +761,10 @@ main(int argc, char **argv)
 
         printf("done: \n");
 
-
         rt_port_create(portid, rt_ports_eth_addr[portid].addr_bytes,
             tx_buffer[portid]);
 
         rte_eth_promiscuous_enable(portid);
-
-        printf("Port %u, MAC address: %02X:%02X:%02X:%02X:%02X:%02X\n\n",
-                (unsigned) portid,
-                rt_ports_eth_addr[portid].addr_bytes[0],
-                rt_ports_eth_addr[portid].addr_bytes[1],
-                rt_ports_eth_addr[portid].addr_bytes[2],
-                rt_ports_eth_addr[portid].addr_bytes[3],
-                rt_ports_eth_addr[portid].addr_bytes[4],
-                rt_ports_eth_addr[portid].addr_bytes[5]);
 
         /* initialize port stats */
         memset(&port_statistics, 0, sizeof(port_statistics));

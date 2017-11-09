@@ -62,10 +62,6 @@ Command Line Arguments (beyond what l2fwd supports):
 
 Limitations:
 
- * Just like l2fwd, this tool has only one single queue allocated per
-   output port. This means that if one uses multiple cores there's a
-   potential risk of data corruption.
-
  * TTL decrement nor TTL checking is not implemented.
 
  * Packet sanity checks are generally not performed.

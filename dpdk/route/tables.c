@@ -171,7 +171,7 @@ rt_lpm_find_or_create (rt_rd_t rdidx, rt_ipv4_prefix_t prefix,
 
 rt_lpm_t *
 rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
-    rt_ipv4_addr_t nhipa)
+    uint32_t flags, rt_ipv4_addr_t nhipa)
 {
     rt_ipv4_prefix_t prefix;
     prefix.addr = ipaddr;
@@ -179,7 +179,7 @@ rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
     rt_lpm_t *rt = rt_lpm_find_or_create(rdidx, prefix, NULL);
     assert(rt != NULL);
     rt->nhipa = nhipa;
-    rt->flags |= RT_LPM_F_HAS_NEXTHOP;
+    rt->flags |= flags;
     return rt;
 }
 

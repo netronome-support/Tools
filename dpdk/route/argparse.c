@@ -78,6 +78,7 @@ parse_ipv4_route (const char *arg)
     strncpy(argstr, arg, 127);
     int rdidx = RT_RD_DEFAULT;
     int plen = 32;
+    uint32_t nh_flags = 0;
     char *slash = index(argstr, '/');
     char *at    = index(argstr, '@');
     char *numch = index(argstr, '#');
@@ -108,6 +109,7 @@ parse_ipv4_route (const char *arg)
         (strcasecmp(&at[1], "discard") == 0) ||
         (strcasecmp(&at[1], "blackhole") == 0)) {
         nhipa = 0; /* Blackhole */
+        nh_flags |= RT_LPM_F_DISCARD;
     } else {
         rc = inet_pton(AF_INET, &at[1], &nhipa);
         if (rc != 1) {
@@ -115,9 +117,10 @@ parse_ipv4_route (const char *arg)
                 " IP address '%s'.\n", arg);
             return -1;
         }
+        nh_flags |= RT_LPM_F_HAS_NEXTHOP;
     }
 
-    rt_lpm_route_create(rdidx, ntohl(ipaddr), plen, ntohl(nhipa));
+    rt_lpm_route_create(rdidx, ntohl(ipaddr), plen, nh_flags, ntohl(nhipa));
 
     char t0[32], t1[32];
     dbgmsg(CONF, nopkt, "Route (%u) %s/%u -> %s", rdidx,

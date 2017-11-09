@@ -136,6 +136,14 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
         return;
     }
 
+    if (rt_flags & RT_DT_F_DISCARD) {
+        if (pkt.pi != NULL) {
+            rt_dt_create(pkt.rdidx, ipda, rt, rt_flags);
+        }
+        rt_pkt_discard(pkt);
+        return;
+    }
+
     if (flags & PKT_SEND_F_UPDATE_IPSA) {
         rt_ipv4_hdr_t *ip = (rt_ipv4_hdr_t *) pkt.pp.l3;
         ip->ipsa = htonl(rt->pi->ipaddr);
@@ -173,11 +181,17 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
     /* Look-up in Direct (fast) Table */
     rt_dt_route_t *drp = rt_dt_lookup(pkt.rdidx, ipda);
     if (drp != NULL) {
+        if (drp->flags) {
+            if (drp->flags & RT_DT_F_DISCARD) {
+                rt_pkt_discard(pkt);
+                return;
+            }
+        }
         /* Update MAC addresses */
         memcpy(&pkt.eth->dst, drp->eth.dst, 6);
         memcpy(&pkt.eth->src, &drp->eth.src, 6);
         /* Send Packet */
-        rt_pkt_send_fast(pkt, drp->port, drp->tx_buffer);
+        rt_pkt_send_fast(pkt, drp->port);
         return;
     }
 

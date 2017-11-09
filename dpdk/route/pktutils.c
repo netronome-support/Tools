@@ -14,16 +14,14 @@ rt_pkt_send (rt_pkt_t pkt, rt_port_info_t *pi)
 {
     //dbgmsg(INFO, pkt, "rt_pkt_send");
     rt_port_index_t port = pi->idx;
-    struct rte_eth_dev_tx_buffer *buffer = pi->tx_buffer;
     if (!(pi->flags & RT_PORT_F_EXIST)) {
         dbgmsg(WARN, pkt, "port not active (%u)", pi->idx);
         rt_pkt_discard(pkt);
         return;
     }
     assert(pkt.rdidx != 0);
-    assert(buffer != NULL);
     assert(pkt.mbuf != NULL);
-    rte_eth_tx_buffer(port, 0, buffer, pkt.mbuf);
+    tx_pkt_enqueue(port, pkt.mbuf);
 }
 
 void

@@ -8,6 +8,7 @@
 
 #include "defines.h"
 #include "port.h"
+#include "rings.h"
 
 #define PTR(ptr, type, offset) \
   ((type *) &(((char *) (ptr))[offset]))
@@ -74,11 +75,10 @@ rt_eth_addr_compare (rt_eth_addr_t *a, rt_eth_addr_t *b)
 }
 
 static inline void
-rt_pkt_send_fast (rt_pkt_t pkt, rt_port_index_t port, void *tx_buffer)
+rt_pkt_send_fast (rt_pkt_t pkt, rt_port_index_t port)
 {
-    assert(tx_buffer != NULL);
     assert(pkt.mbuf != NULL);
-    rte_eth_tx_buffer(port, 0, tx_buffer, pkt.mbuf);
+    tx_pkt_enqueue(port, pkt.mbuf);
 }
 
 extern rt_eth_addr_t rt_eth_bcast_hw_addr;
