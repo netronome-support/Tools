@@ -13,29 +13,41 @@ extern FILE *rt_log_fd;
 
 /* DHCP Port Information */
 typedef struct {
-  uint8_t           state;
-  uint32_t          transaction;
-  rt_ipv4_addr_t    srv_ipaddr;
-  rt_ipv4_addr_t    offer_ipv4_addr;
+    uint8_t             state;
+    uint32_t            transaction;
+    rt_ipv4_addr_t      srv_ipaddr;
+    rt_ipv4_addr_t      offer_ipv4_addr;
 } rt_dhcp_info_t;
 
 /* Port Information */
 typedef struct {
-  rt_port_index_t   idx;
-  rt_rd_t           rdidx;
-  uint8_t           flags;
-  rt_eth_addr_t     hwaddr;
-  rt_ipv4_prefix_t  prefix;
-  rt_ipv4_addr_t    ipaddr;
-  void              *tx_buffer;
-  rt_cnt_idx_t      cntidx;
-  rt_dhcp_info_t    dhcpinfo;
+    rt_port_index_t     idx;
+    rt_rd_t             rdidx;
+    uint8_t             flags;
+    rt_eth_addr_t       hwaddr;
+    rt_ipv4_prefix_t    prefix;
+    rt_ipv4_addr_t      ipaddr;
+    void                *tx_buffer;
+    rt_cnt_idx_t        cntidx;
+    rt_dhcp_info_t      dhcpinfo;
+    uint16_t            rx_lcore;
+    uint16_t            tx_lcore;
 } rt_port_info_t;
+
+typedef struct {
+    int count;
+    rt_port_index_t prtidx[0];
+} rx_port_list_t;
 
 #define RT_PORT_F_EXIST         (1 << 0)
 #define RT_PORT_F_PROMISC       (1 << 1)
 
-#define RT_PORT_MAX 128
+#define RT_PORT_LCORE_UNASSIGNED    (65535)
+
+#define RT_PORT_DIR_RX      1
+#define RT_PORT_DIR_TX      2
+
+#define RT_PORT_MAX 32
 extern rt_port_info_t rt_port_table[RT_PORT_MAX];
 
 static inline rt_port_info_t *
@@ -55,6 +67,11 @@ void rt_port_set_ipv4_addr (rt_port_index_t port, rt_ipv4_addr_t addr,
 
 void rt_port_set_ip_addr (rt_port_index_t port,
     const char *str, int len);
+
+void rt_port_assign_thread (int prtidx, int direction, int lcore);
+void rt_lcore_default_assign (int dir, int cnt, uint32_t mask);
+rx_port_list_t *create_thread_rx_port_list (void);
+void log_port_lcore_assignment (uint32_t portmask);
 
 extern void rt_port_table_init (void);
 

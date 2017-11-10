@@ -104,12 +104,14 @@ create_thread_ring_set (tx_ring_set_t *grs)
     int thridx = 0;
     /* Count the number of ports needed */
     for (prtidx = 0 ; prtidx < grs->count ; prtidx++) {
-        if (grs->ri[prtidx].lcore == lcore)
+        rt_port_info_t *pi = rt_port_lookup(prtidx);
+        if (pi->tx_lcore == lcore)
             prtcnt++;
     }
     tx_ring_set_t *trs = create_ring_set(prtcnt);
     for (prtidx = 0 ; prtidx < grs->count ; prtidx++) {
-        if (grs->ri[prtidx].lcore == lcore) {
+        rt_port_info_t *pi = rt_port_lookup(prtidx);
+        if (pi->tx_lcore == lcore) {
             tx_ring_info_t *ri = &trs->ri[thridx++];
             ri->ring = grs->ri[prtidx].ring;
             ri->prtidx = grs->ri[prtidx].prtidx;
@@ -153,45 +155,6 @@ ring_set_find_port (tx_ring_set_t *grs, int prtidx)
             return &grs->ri[i];
     }
     return NULL;
-}
-
-void
-global_ring_set_thread_assign (tx_ring_set_t *grs,
-    int prtidx, int lcore)
-{
-    tx_ring_info_t *rip = ring_set_find_port(grs, prtidx);
-    if (rip != NULL) {
-        dbgmsg(CONF, nopkt, "Assigning TX port %u to lcore %u",
-            rip->prtidx, lcore);
-        rip->lcore = lcore;
-    }
-}
-
-static inline int
-find_next_lcore_index (uint8_t lcore_idx)
-{
-    for (;;) {
-        if (lcore_idx >= RTE_MAX_LCORE)
-            lcore_idx = 0;
-        if (rte_lcore_is_enabled(lcore_idx))
-            return lcore_idx;
-        lcore_idx++;
-    }
-}
-
-void
-global_ring_default_assign (tx_ring_set_t *grs,
-    int nb_ports, uint32_t portmask)
-{
-    uint8_t lcore_next_idx = 0;
-    int prtidx;
-    for (prtidx = 0 ; prtidx < nb_ports ; prtidx++) {
-        if ((portmask & (1 << prtidx)) == 0)
-            continue;
-        uint8_t lcore = find_next_lcore_index(lcore_next_idx);
-        global_ring_set_thread_assign(grs, prtidx, lcore);
-        lcore_next_idx = lcore + 1;
-    }
 }
 
 /**********************************************************************/

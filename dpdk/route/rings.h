@@ -38,7 +38,6 @@ RTE_DECLARE_PER_LCORE(tx_queue_set_t *, _queue_set);
  */
 typedef struct {
     uint16_t prtidx;
-    uint16_t lcore;
     struct rte_ring *ring;
 } tx_ring_info_t;
 

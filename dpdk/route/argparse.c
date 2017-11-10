@@ -231,3 +231,41 @@ add_static_arp_entry (const char *argstr)
         rt_ipaddr_nr_str(nhipa), rt_hwaddr_str(hwaddr));
     return 0;
 }
+
+int
+parse_port_pinning (const char *arg)
+{
+    // Format: --pin 1:1,2 --pin <port>:<rx lcore>,<tx lcore>
+    char argstr[128];
+    strncpy(argstr, arg, 127);
+    /* Character Position Pointers */
+    char *cpp_colon = index(argstr, ':');
+    char *cpp_comma = index(argstr, ',');
+    int prtidx;
+    rt_port_info_t *pi;
+    char *endstr;
+    if (cpp_colon == NULL)
+        goto ParseError;
+    *cpp_colon = 0;
+    prtidx = strtol(argstr, &endstr, 10);
+    if (*endstr != '\0')
+        goto ParseError;
+    pi = rt_port_lookup(prtidx);
+    if (cpp_comma != NULL) {
+        *cpp_comma = 0;
+    }
+    pi->rx_lcore = strtol(&cpp_colon[1], &endstr, 10);
+    if (*endstr != '\0')
+        goto ParseError;
+    if (cpp_comma != NULL) {
+        pi->tx_lcore = strtol(&cpp_comma[1], &endstr, 10);
+        if (*endstr != '\0')
+            goto ParseError;
+    } else {
+        pi->tx_lcore = pi->rx_lcore;
+    }
+    return 0;
+  ParseError:
+    fprintf(stderr, "ERROR: could not parse '%s'\n", arg);
+    return -1;
+}

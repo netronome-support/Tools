@@ -254,14 +254,13 @@ print_stats(void)
 
 /* main processing loop */
 static void
-rt_main_loop(void)
+rt_main_loop (void)
 {
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_mbuf *m;
     unsigned lcore_id;
     uint64_t prev_tsc, diff_tsc, cur_tsc, timer_tsc;
-    unsigned i, j, portid, nb_rx;
-    struct lcore_queue_conf *qconf;
+    unsigned i, j, nb_rx;
     const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
             BURST_TX_DRAIN_US;
 
@@ -269,25 +268,17 @@ rt_main_loop(void)
     timer_tsc = 0;
 
     lcore_id = rte_lcore_id();
-    qconf = &lcore_queue_conf[lcore_id];
 
     tx_queue_set_t *qs = create_queue_set(grs);
     tx_ring_set_t *trs = create_thread_ring_set(grs);
+    rx_port_list_t *rx_port_list = create_thread_rx_port_list();
 
-    if ((qconf->n_rx_port == 0) && (trs->count == 0)) {
+    if ((rx_port_list->count == 0) && (trs->count == 0)) {
         RTE_LOG(INFO, ROUTE, "lcore %u has nothing to do\n", lcore_id);
         return;
     }
 
     RTE_LOG(INFO, ROUTE, "entering main loop on lcore %u\n", lcore_id);
-
-    for (i = 0; i < qconf->n_rx_port; i++) {
-
-        portid = qconf->rx_port_list[i];
-        RTE_LOG(INFO, ROUTE, " -- lcoreid=%u portid=%u\n", lcore_id,
-            portid);
-
-    }
 
     while (!force_quit) {
 
@@ -331,21 +322,21 @@ rt_main_loop(void)
         /*
          * Read packet from RX queues
          */
-        for (i = 0; i < qconf->n_rx_port; i++) {
+        unsigned int count = rx_port_list->count;
+        for (i = 0 ; i < count ; i++) {
+            int prtidx = rx_port_list->prtidx[i];
 
-            portid = qconf->rx_port_list[i];
-            nb_rx = rte_eth_rx_burst((uint8_t) portid, 0,
+            nb_rx = rte_eth_rx_burst((uint8_t) prtidx, 0,
                 pkts_burst, MAX_PKT_BURST);
 
-            port_statistics[portid].rx += nb_rx;
+            port_statistics[prtidx].rx += nb_rx;
 
-            update_load_statistics(portid, nb_rx);
+            update_load_statistics(prtidx, nb_rx);
 
-            for (j = 0; j < nb_rx; j++) {
+            for (j = 0 ; j < nb_rx ; j++) {
                 m = pkts_burst[j];
                 rte_prefetch0(rte_pktmbuf_mtod(m, void *));
-                //rt_simple_forward(m, portid);
-                rt_pkt_process(portid, m);
+                rt_pkt_process(prtidx, m);
             }
         }
 
@@ -356,7 +347,7 @@ rt_main_loop(void)
 }
 
 static int
-rt_launch_one_lcore(__attribute__((unused)) void *dummy)
+rt_launch_one_lcore (__attribute__((unused)) void *dummy)
 {
     rt_main_loop();
     return 0;
@@ -378,7 +369,7 @@ rt_usage(const char *prgname)
 }
 
 static int
-rt_parse_portmask(const char *portmask)
+rt_parse_portmask (const char *portmask)
 {
     char *end = NULL;
     unsigned long pm;
@@ -395,7 +386,7 @@ rt_parse_portmask(const char *portmask)
 }
 
 static unsigned int
-rt_parse_nqueue(const char *q_arg)
+rt_parse_nqueue (const char *q_arg)
 {
     char *end = NULL;
     unsigned long n;
@@ -413,7 +404,7 @@ rt_parse_nqueue(const char *q_arg)
 }
 
 static int
-rt_parse_timer_period(const char *q_arg)
+rt_parse_timer_period (const char *q_arg)
 {
     char *end = NULL;
     int n;
@@ -430,7 +421,7 @@ rt_parse_timer_period(const char *q_arg)
 
 /* Parse the argument given in the command line of the application */
 static int
-rt_parse_args(int argc, char **argv)
+rt_parse_args (int argc, char **argv)
 {
     int opt, ret, timer_secs;
     char **argvopt;
@@ -443,6 +434,7 @@ rt_parse_args(int argc, char **argv)
         { "promisc", required_argument, NULL, 1004},
         { "static", required_argument, NULL, 1005},
         { "log-level", required_argument, NULL, 1006},
+        { "pin", required_argument, NULL, 1007},
         { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
         { "no-statistics", no_argument, &print_statistics, 0},
         { "ping-nexthops", no_argument, &ping_nexthops, 1},
@@ -454,6 +446,7 @@ rt_parse_args(int argc, char **argv)
     while ((opt = getopt_long(argc, argvopt, "p:q:T:",
             lgopts, &option_index)) != EOF) {
 
+        int rc = 0;
         switch (opt) {
         /* portmask */
         case 'p':
@@ -487,37 +480,31 @@ rt_parse_args(int argc, char **argv)
             break;
 
         case 1001:
-            ret = parse_iface_addr(optarg);
-            if (ret < 0)
-                return -1;
+            rc = parse_iface_addr(optarg);
             break;
 
         case 1002:
-            ret = parse_ipv4_route(optarg);
-            if (ret < 0)
-                return -1;
+            rc = parse_ipv4_route(optarg);
             break;
 
         case 1003:
-            ret = dbgmsg_fopen(optarg);
-            if (ret < 0)
-                return -1;
+            rc = dbgmsg_fopen(optarg);
             break;
 
         case 1004:
-            ret = port_set_promisc_flag(optarg);
-            if (ret < 0)
-                return -1;
+            rc = port_set_promisc_flag(optarg);
             break;
 
         case 1005:
-            ret = add_static_arp_entry(optarg);
-            if (ret < 0)
-                return -1;
+            rc = add_static_arp_entry(optarg);
             break;
 
         case 1006: /* --log-level */
             dbgmsg_globals.log_level = strtol(optarg, NULL, 10);
+            break;
+
+        case 1007: /* --pin */
+            rc = parse_port_pinning(optarg);
             break;
 
         /* long options */
@@ -528,6 +515,8 @@ rt_parse_args(int argc, char **argv)
             rt_usage(prgname);
             return -1;
         }
+        if (rc < 0)
+            return -1;
     }
 
     if (optind >= 0)
@@ -540,7 +529,7 @@ rt_parse_args(int argc, char **argv)
 
 /* Check the link status of all ports in up to 9s, and print them finally */
 static void
-check_all_ports_link_status(uint8_t port_num, uint32_t port_mask)
+check_all_ports_link_status (uint8_t port_num, uint32_t port_mask)
 {
     #define CHECK_INTERVAL 100 /* 100ms */
     #define MAX_CHECK_TIME 90 /* 9s (90 * 100ms) in total */
@@ -598,7 +587,7 @@ check_all_ports_link_status(uint8_t port_num, uint32_t port_mask)
 }
 
 static void
-signal_handler(int signum)
+signal_handler (int signum)
 {
     if (signum == SIGINT || signum == SIGTERM) {
         printf("\n\nSignal %d received, preparing to exit...\n", signum);
@@ -607,15 +596,14 @@ signal_handler(int signum)
 }
 
 int
-main(int argc, char **argv)
+main (int argc, char **argv)
 {
-    struct lcore_queue_conf *qconf;
     struct rte_eth_dev_info dev_info;
     int ret;
     uint8_t nb_ports;
     uint8_t nb_ports_available;
     uint8_t portid;
-    unsigned lcore_id, rx_lcore_id;
+    unsigned lcore_id;
     unsigned nb_ports_in_mask = 0;
 
     /* init EAL */
@@ -669,37 +657,17 @@ main(int argc, char **argv)
     if (rt_pktmbuf_pool == NULL)
         rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
 
-    rx_lcore_id = 0;
-    qconf = NULL;
-
-    /* Initialize the port/queue configuration of each logical core */
-    for (portid = 0; portid < nb_ports; portid++) {
-        /* skip ports that are not enabled */
-        if ((rt_enabled_port_mask & (1 << portid)) == 0)
-            continue;
-
-        /* get the lcore_id for this port */
-        while (rte_lcore_is_enabled(rx_lcore_id) == 0 ||
-               lcore_queue_conf[rx_lcore_id].n_rx_port ==
-               rt_rx_queue_per_lcore) {
-            rx_lcore_id++;
-            if (rx_lcore_id >= RTE_MAX_LCORE)
-                rte_exit(EXIT_FAILURE, "Not enough cores\n");
-        }
-
-        if (qconf != &lcore_queue_conf[rx_lcore_id])
-            /* Assigned a new logical core in the loop above. */
-            qconf = &lcore_queue_conf[rx_lcore_id];
-
-        qconf->rx_port_list[qconf->n_rx_port] = portid;
-        qconf->n_rx_port++;
-        printf("Lcore %u: RX port %u\n", rx_lcore_id, (unsigned) portid);
-    }
-
     nb_ports_available = nb_ports;
 
     grs = create_global_ring_set(nb_ports);
-    global_ring_default_assign(grs, nb_ports, rt_enabled_port_mask);
+
+    rt_lcore_default_assign(RT_PORT_DIR_RX, nb_ports,
+        rt_enabled_port_mask);
+
+    rt_lcore_default_assign(RT_PORT_DIR_TX, nb_ports,
+        rt_enabled_port_mask);
+
+    log_port_lcore_assignment(rt_enabled_port_mask);
 
     /* Initialise each port */
     for (portid = 0; portid < nb_ports; portid++) {

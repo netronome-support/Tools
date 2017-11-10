@@ -38,6 +38,11 @@ Command Line Arguments (beyond what l2fwd supports):
 
     Add static ARP entry.
 
+ --pin <portid>:<RX & TX lcore>
+ --pin <portid>:<RX lcore>,<TX lcore>
+
+    Assign a port to logical cores (0..)
+
  --ping-nexthops
 
     Regularly (once per second) ping all route nexthops.
