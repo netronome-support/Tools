@@ -94,7 +94,7 @@ rt_lcore_default_assign (int direction, int nb_ports,
 {
     uint8_t lcore_next_idx = 0;
     int prtidx;
-    for (prtidx = 0 ; prtidx < nb_ports ; prtidx++) {
+    for (prtidx = 0 ; prtidx <= nb_ports ; prtidx++) {
         if ((portmask & (1 << prtidx)) == 0)
             continue;
         /* Skip if the port is already assigned */

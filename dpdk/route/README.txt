@@ -67,7 +67,7 @@ Command Line Arguments (beyond what l2fwd supports):
 
 Limitations:
 
- * TTL decrement nor TTL checking is not implemented.
+ * TTL decrement and TTL checking are not implemented.
 
  * Packet sanity checks are generally not performed.
 
