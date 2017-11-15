@@ -128,14 +128,14 @@ flush_thread_ring_set (tx_ring_set_t *trs)
 {
     int cnt = trs->count;
     int idx;
-    struct rte_mbuf *mbufs[128];
+    struct rte_mbuf *mbufs[TX_RING_SIZE];
     for (idx = 0 ; idx < cnt ; idx++) {
         tx_ring_info_t *ri = &trs->ri[idx];
         struct rte_ring *ring = ri->ring;
         if (rte_ring_empty(ring))
             continue;
         uint16_t pktcnt = rte_ring_mc_dequeue_burst(ring,
-            (void **) mbufs, 128);
+            (void **) mbufs, TX_RING_SIZE);
         uint16_t sndcnt = rte_eth_tx_burst(ri->prtidx, 0, mbufs, pktcnt);
         if (unlikely(sndcnt < pktcnt)) {
             pktmbuf_free_bulk(&mbufs[sndcnt], pktcnt - sndcnt);

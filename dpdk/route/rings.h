@@ -13,7 +13,7 @@
 #include "defines.h"
 
 /**********************************************************************/
-#define TX_QUEUE_SIZE_SHIFT  (4)
+#define TX_QUEUE_SIZE_SHIFT  (6)
 #define TX_QUEUE_SIZE (1 << TX_QUEUE_SIZE_SHIFT)
 
 typedef struct {
@@ -29,7 +29,7 @@ typedef struct {
 RTE_DECLARE_PER_LCORE(tx_queue_set_t *, _queue_set);
 
 /**********************************************************************/
-#define TX_RING_SIZE 16
+#define TX_RING_SIZE 256
 
 /*
  * Each thread has its own private tx_ring_set_t

@@ -93,7 +93,7 @@ static int ping_nexthops = 0;
  * Configurable number of RX/TX ring descriptors
  */
 #define RTE_TEST_RX_DESC_DEFAULT 1024
-#define RTE_TEST_TX_DESC_DEFAULT  256
+#define RTE_TEST_TX_DESC_DEFAULT  512
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 
@@ -273,7 +273,8 @@ rt_main_loop (void)
     tx_ring_set_t *trs = create_thread_ring_set(grs);
     rx_port_list_t *rx_port_list = create_thread_rx_port_list();
 
-    if ((rx_port_list->count == 0) && (trs->count == 0)) {
+    if ((rx_port_list->count == 0) && (trs->count == 0)
+            && (lcore_id != rte_get_master_lcore())) {
         RTE_LOG(INFO, ROUTE, "lcore %u has nothing to do\n", lcore_id);
         return;
     }
