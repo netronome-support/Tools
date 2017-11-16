@@ -85,19 +85,19 @@ static int ping_nexthops = 0;
 
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
-#define MAX_PKT_BURST 32
+#define MAX_PKT_BURST 64
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
 #define MEMPOOL_CACHE_SIZE 256
 
 /*
  * Configurable number of RX/TX ring descriptors
  */
-#define RTE_TEST_RX_DESC_DEFAULT 1024
+#define RTE_TEST_RX_DESC_DEFAULT 2048
 #define RTE_TEST_TX_DESC_DEFAULT  512
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 
-#define RTE_MBUF_DESC_MARGIN     1024
+#define RTE_MBUF_DESC_MARGIN     8192
 
 /* ethernet addresses of ports */
 static struct ether_addr rt_ports_eth_addr[RTE_MAX_ETHPORTS];
