@@ -45,6 +45,13 @@ list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
 
 ########################################################
+nfplist=$(find /sys/bus/pci/drivers/nfp -type l -name '*:*:*.*')
+for nfpdir in $nfplist ; do
+    list+=( "$nfpdir/numa_node" )
+    list+=( "$nfpdir/irq" )
+done
+
+########################################################
 cplist=()
 for fname in ${list[@]} ; do
     if [ -e $fname ]; then
