@@ -7,7 +7,7 @@ capdir="$tmpdir/$capname"
 
 mkdir -p $capdir
 
-###################################################
+########################################################
 # Copy system files
 
 list=()
@@ -52,14 +52,14 @@ for nfpdir in $nfplist ; do
 done
 
 ########################################################
-cplist=()
 for fname in ${list[@]} ; do
     if [ -e $fname ]; then
-        cplist+=( $fname )
+        /bin/cp -R --parents $fname \
+            --target-directory $capdir
+    else
+        echo "Missing $fname" >> $capdir/missing-files.txt
     fi
 done
-
-/bin/cp -R --parents --target-directory $capdir ${cplist[@]}
 
 ########################################################
 function run () {
@@ -93,6 +93,7 @@ run "arp" "-n"                  "arp-n.txt"
 run "lsmod" ""                  "lsmod.txt"
 run "ps" "aux"                  "ps-aux.txt"
 run "dmidecode" "--type system" "dmidecode.txt"
+run "lshw" ""                   "lshw.txt"
 run "printenv" ""               "printenv.txt"
 
 run "virsh" "--version"         "virsh-version.txt"
@@ -105,6 +106,9 @@ run "/opt/netronome/bin/ovs-ctl" "version" "ovs-version.txt"
 run "/opt/netronome/bin/ovs-ctl" "status" "ovs-status.txt"
 run "/opt/netronome/bin/nfp-hwinfo" "" "nfp-hwinfo.txt"
 run "/opt/netronome/bin/nfp-media" "" "nfp-media.txt"
+run "/opt/netronome/bin/nfp-programmables" "" "nfp-programmables.txt"
+run "/opt/netronome/bin/nfp-arm" "-D" "nfp-arm-D.txt"
+run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
 
 run "ovs-dpctl" "dump-flows -m" "ovs-dpctl-flows.txt"
 run "ovs-ctl" "status troubleshoot -C" "ovs-ctl-status-troubleshoot.txt"
@@ -205,6 +209,11 @@ if [ -x $(which ovs-vsctl) ]; then
     done
 fi
         
+########################################################
+# Copy capture script
+
+/bin/cp $0 --target-directory $capdir
+
 ########################################################
 
 tar cz -C $tmpdir -f $HOME/$capname.tgz $capname
