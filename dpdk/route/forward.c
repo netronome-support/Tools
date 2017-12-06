@@ -65,10 +65,9 @@ rt_resolve_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t nhipa)
 
     if (!rt_lpm_is_host_route(nhr)) {
         /* Create (or find) host route */
-        rt_ipv4_prefix_t prefix;
-        prefix.addr = nhipa;
-        prefix.len = 32;
-        nhr = rt_lpm_find_or_create(rdidx, prefix, nhr->pi);
+        dbgmsg(INFO, nopkt, "Create host route (%u) %s",
+            rdidx, rt_ipaddr_nr_str(nhipa));
+        nhr = rt_lpm_add_nexthop(rdidx, nhipa);
         nh_flags = nhr->flags;
     }
 
@@ -84,7 +83,7 @@ rt_resolve_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t nhipa)
 static inline void
 rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
 {
-    rt_lpm_t *nhr = rt_resolve_nexthop(pkt.rdidx, rt->nhipa);
+    rt_lpm_t *nhr = rt_resolve_nexthop(rt->nh_rdidx, rt->nhipa);
     if (nhr == NULL) {
         rt_pkt_discard(pkt);
         return;

@@ -37,6 +37,7 @@ typedef struct rt_lpm_s {
   rt_port_info_t *pi; /* Egress Port Information */
   rt_eth_addr_t hwaddr;
   rt_ipv4_addr_t nhipa;
+  rt_rd_t nh_rdidx;
   struct rt_lpm_s *nh; /* Next Hop */
   rt_pkt_t pkt; /* Pending Packet for Address Resolution */
   rt_cnt_idx_t cntidx;
@@ -90,7 +91,7 @@ rt_lpm_t *rt_lpm_lookup (rt_rd_t rdidx, rt_ipv4_addr_t addr);
 rt_lpm_t *rt_lpm_find_or_create (rt_rd_t rdidx,
     rt_ipv4_prefix_t prefix, rt_port_info_t *pi);
 rt_lpm_t *rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
-    uint32_t flags, rt_ipv4_addr_t nhipa);
+    uint32_t flags, rt_ipv4_addr_t nhipa, rt_rd_t nh_rdidx);
 rt_lpm_t *rt_lpm_add_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr);
 
 static inline rt_lpm_t *

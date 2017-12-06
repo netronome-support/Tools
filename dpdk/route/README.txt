@@ -30,9 +30,10 @@ Command Line Arguments (beyond what l2fwd supports):
     it will attempt to discover the IP address via DHCP. The routing
     domain defaults to '1' if not specified.
 
- --route [<route domain>#]<IPv4 addr>/<prefix length>@<next hop IPv4 addr>
+ --route [<route domain>#]<IPv4 addr>/<prefix length>@[<route domain>#]<next hop IPv4 addr>
 
     This adds a route to the specified (or default) routing domain.
+    Note that the next-hop can exist in a different routing domain.
 
  --static [<route domain>#]<next hop IPv4 addr>@<MAC address>
 

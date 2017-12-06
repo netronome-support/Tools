@@ -125,7 +125,7 @@ rt_lpm_lookup (rt_rd_t rdidx, rt_ipv4_addr_t addr)
     for (p = rt_db_home.prev ; p != &rt_db_home ; p = p->prev) {
         if (p->rdidx != rdidx)
             continue;
-        uint32_t mask = 0xffffffff << (32 - p->prefix.len);
+        uint32_t mask = ((uint64_t) 0xffffffff) << (32 - p->prefix.len);
         if ( ( (addr ^ p->prefix.addr ) & mask ) == 0 ) {
             return p;
         }
@@ -171,7 +171,7 @@ rt_lpm_find_or_create (rt_rd_t rdidx, rt_ipv4_prefix_t prefix,
 
 rt_lpm_t *
 rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
-    uint32_t flags, rt_ipv4_addr_t nhipa)
+    uint32_t flags, rt_ipv4_addr_t nhipa, rt_rd_t nh_rdidx)
 {
     rt_ipv4_prefix_t prefix;
     prefix.addr = ipaddr;
@@ -179,6 +179,7 @@ rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
     rt_lpm_t *rt = rt_lpm_find_or_create(rdidx, prefix, NULL);
     assert(rt != NULL);
     rt->nhipa = nhipa;
+    rt->nh_rdidx = nh_rdidx;
     rt->flags |= flags;
     return rt;
 }
@@ -216,8 +217,8 @@ rt_lpm_sprintf (char *str, const rt_lpm_t *rt)
     n += sprintf(&str[n], "(%u) %s/%u", rt->rdidx,
         rt_ipaddr_str(tmpstr, rt->prefix.addr), rt->prefix.len);
     if (flags & RT_LPM_F_HAS_NEXTHOP) {
-        n += sprintf(&str[n], " NH: %s",
-            rt_ipaddr_str(tmpstr, rt->nhipa));
+        n += sprintf(&str[n], " NH: (%u) %s",
+            rt->nh_rdidx, rt_ipaddr_str(tmpstr, rt->nhipa));
     }
     if (rt->nh) {
         rt_lpm_sprintf(tmpstr, rt->nh);
@@ -263,7 +264,7 @@ rt_lpm_gen_icmp_requests (void)
 
     for (p = rt_db_home.next ; p != &rt_db_home ; p = p->next) {
         if ((p->flags & RT_LPM_F_HAS_NEXTHOP) && (p->nh == NULL)) {
-            p->nh = rt_resolve_nexthop(p->rdidx, p->nhipa);
+            p->nh = rt_resolve_nexthop(p->nh_rdidx, p->nhipa);
         }
     }
 

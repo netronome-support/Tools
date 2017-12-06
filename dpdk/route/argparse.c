@@ -72,22 +72,24 @@ parse_iface_addr (const char *arg)
 int
 parse_ipv4_route (const char *arg)
 {
-    /* Format: [<rdidx>#]<IPv4 addr>/<prefix length>@<next hop IPv4 addr> */
+    /* Format: [<rdidx>#]<IPv4 addr>/<prefix length>@[<rdidx>#]<next hop IPv4 addr> */
     int rc;
     char argstr[128];
     strncpy(argstr, arg, 127);
     int rdidx = RT_RD_DEFAULT;
+    int nh_rdidx;
     int plen = 32;
     uint32_t nh_flags = 0;
-    char *slash = index(argstr, '/');
-    char *at    = index(argstr, '@');
-    char *numch = index(argstr, '#');
+    char *at = index(argstr, '@');
     if (at == NULL) {
         fprintf(stderr, "ERROR: could not parse route '%s'.\n",
             arg);
         return -1;
     }
     *at = 0;
+    /* Parse route prefix (before @) */
+    char *slash = index(argstr, '/');
+    char *numch = index(argstr, '#');
     const char *sp_ipaddr = argstr;
     if (numch != NULL) {
         *numch = 0;
@@ -105,13 +107,23 @@ parse_ipv4_route (const char *arg)
             " IP address '%s'.\n", arg);
         return -1;
     }
-    if ((strcasecmp(&at[1], "drop") == 0) ||
-        (strcasecmp(&at[1], "discard") == 0) ||
-        (strcasecmp(&at[1], "blackhole") == 0)) {
+    /* Parse next-hop (after @) */
+    const char *sp_nexthop = &at[1];
+    const char *sp_numch = index(sp_nexthop, '#');
+    if (sp_numch != NULL) {
+        nh_rdidx = strtol(sp_nexthop, NULL, 10);
+        printf("PARSE %d\n", nh_rdidx);
+        sp_nexthop = &sp_numch[1];
+    } else {
+        nh_rdidx = rdidx;
+    }
+    if ((strcasecmp(sp_nexthop, "drop") == 0) ||
+        (strcasecmp(sp_nexthop, "discard") == 0) ||
+        (strcasecmp(sp_nexthop, "blackhole") == 0)) {
         nhipa = 0; /* Blackhole */
         nh_flags |= RT_LPM_F_DISCARD;
     } else {
-        rc = inet_pton(AF_INET, &at[1], &nhipa);
+        rc = inet_pton(AF_INET, sp_nexthop, &nhipa);
         if (rc != 1) {
             fprintf(stderr, "ERROR: could not parse next-hop"
                 " IP address '%s'.\n", arg);
@@ -120,12 +132,13 @@ parse_ipv4_route (const char *arg)
         nh_flags |= RT_LPM_F_HAS_NEXTHOP;
     }
 
-    rt_lpm_route_create(rdidx, ntohl(ipaddr), plen, nh_flags, ntohl(nhipa));
+    rt_lpm_route_create(rdidx, ntohl(ipaddr), plen,
+        nh_flags, ntohl(nhipa), nh_rdidx);
 
     char t0[32], t1[32];
-    dbgmsg(CONF, nopkt, "Route (%u) %s/%u -> %s", rdidx,
-        rt_ipaddr_str(t0, ntohl(ipaddr)), plen,
-        rt_ipaddr_str(t1, ntohl(nhipa)));
+    dbgmsg(CONF, nopkt, "Route (%u) %s/%u -> (%u) %s",
+        rdidx, rt_ipaddr_str(t0, ntohl(ipaddr)), plen,
+        nh_rdidx, rt_ipaddr_str(t1, ntohl(nhipa)));
 
     return 0;
 }
