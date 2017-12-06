@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 
+#include <rte_atomic.h>
+
 #include "defines.h"
 #include "pktutils.h"
 
@@ -15,11 +17,21 @@ typedef struct {
 extern dbgmsg_globals_t dbgmsg_globals;
 
 typedef struct {
-    uint64_t last;
-    int suppressed;
-    float credits;
-    float speed;
+    int64_t maxcredits;
+    int64_t speed;
+    rte_atomic64_t last;
+    rte_atomic64_t credits;
+    rte_atomic64_t suppressed;
 } dbgmsg_state_t;
+
+#define DBG_CREDIT_UNIT ((int64_t) (1000000000))
+
+#define DBGMSG_INIT(maxcredits,speed) \
+    { ((maxcredits) * DBG_CREDIT_UNIT), (speed), \
+        RTE_ATOMIC64_INIT(0), \
+        RTE_ATOMIC64_INIT(0), \
+        RTE_ATOMIC64_INIT(0) \
+    }
 
 extern void f_dbgmsg (dbgmsg_state_t *,
     int level, rt_pkt_t pkt, const char *fmt, ...);
@@ -28,7 +40,7 @@ extern rt_pkt_t nopkt;
 
 #define dbgmsg(level, pkt, fmt, ...) \
 do { \
-    static dbgmsg_state_t dbgstate = { 0, 0, 64.0, 1.0 }; \
+    static dbgmsg_state_t dbgstate = DBGMSG_INIT(64,1); \
     f_dbgmsg(&dbgstate, level, pkt, fmt, ##__VA_ARGS__); \
 } while(0)
 

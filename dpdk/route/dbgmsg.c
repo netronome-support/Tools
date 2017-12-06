@@ -12,18 +12,58 @@ rt_pkt_t nopkt;
 
 dbgmsg_globals_t dbgmsg_globals;
 
-static float dbg_speed_factor = 0.0;
+static float dbg_speed_factor = 0;
 
-static inline float
-dbg_calc_credits (dbgmsg_state_t *dbgstate)
+static inline int64_t
+dbg_calc_new_credits (dbgmsg_state_t *dbgstate)
 {
     uint64_t tsc_current = rte_rdtsc();
-    uint64_t elapsed = (dbgstate->last == 0) ? 0
-        : (tsc_current - dbgstate->last);
-    float credits = dbgstate->credits
-        + elapsed * dbgstate->speed * dbg_speed_factor;
-    dbgstate->last = tsc_current;
-    return credits;
+    int64_t last = rte_atomic64_read(&dbgstate->last);
+    if (last == 0) {
+        /* First-time use */
+        rte_atomic64_set(&dbgstate->last, tsc_current);
+        rte_atomic64_set(&dbgstate->credits, dbgstate->maxcredits);
+        return 0;
+    }
+    int64_t elapsed = tsc_current - last;
+    /* Return no credits if no time has elapsed */
+    if (elapsed < 0)
+        return 0;
+    /* Move 'last' forward and return updated value */
+    int64_t updated = rte_atomic64_add_return(&dbgstate->last, elapsed);
+    if (updated != (last + elapsed)) {
+        /* If somebody else updated 'last', undo the operation */
+        rte_atomic64_sub(&dbgstate->last, elapsed);
+        return 0;
+    }
+
+    return (int64_t) ((float) (elapsed * dbgstate->speed) * dbg_speed_factor);
+}
+
+static inline float
+dbg_check_credits (dbgmsg_state_t *dbgstate)
+{
+    /* Calculate new credits from elapsed time */
+    int64_t new_credits = dbg_calc_new_credits(dbgstate);
+
+    int64_t credits = rte_atomic64_read(&dbgstate->credits) + new_credits;
+    if (credits < DBG_CREDIT_UNIT) {
+        /* There are not enough credits */
+        if (new_credits > 0) {
+            /* Add new credits to state */
+            rte_atomic64_add(&dbgstate->credits, new_credits);
+        }
+        rte_atomic64_inc(&dbgstate->suppressed);
+        return 0;
+    }
+    new_credits -= DBG_CREDIT_UNIT;
+    credits -= DBG_CREDIT_UNIT;
+    if (credits > dbgstate->maxcredits) {
+        rte_atomic64_set(&dbgstate->credits, dbgstate->maxcredits);
+    } else {
+        rte_atomic64_add(&dbgstate->credits, new_credits);
+    }
+    return 1;
 }
 
 void f_dbgmsg (dbgmsg_state_t *dbgstate,
@@ -38,15 +78,8 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
     if (level > dbgmsg_globals.log_level)
         return;
 
-    float credits = dbg_calc_credits(dbgstate);
-    
-    if (credits < 0.0) {
-        dbgstate->credits = credits;
-        dbgstate->suppressed++;
+    if (dbg_check_credits(dbgstate) == 0)
         return;
-    } else {
-        dbgstate->credits = credits - 1.0;
-    }
 
     const char *lvlstr;
     switch (level) {
@@ -98,7 +131,7 @@ void dbgmsg_init (void)
 {
     nopkt.mbuf = NULL;
     nopkt.pi = NULL;
-    dbg_speed_factor =  1.0 / (float) rte_get_tsc_hz();
+    dbg_speed_factor = (float) DBG_CREDIT_UNIT / (float) rte_get_tsc_hz();
     dbgmsg_globals.log_level = INFO;
     dbgmsg_globals.log_packets = 0;
 }
