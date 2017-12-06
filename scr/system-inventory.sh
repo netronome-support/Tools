@@ -90,6 +90,8 @@ run "yum" "list"                "yum-list.txt"
 run "dpkg" "--get-selections"   "dpkg-pkg-list.txt"
 run "ifconfig" ""               "ifconfig.txt"
 run "arp" "-n"                  "arp-n.txt"
+run "route" "-n"                "route-n.txt"
+run "netstat" "-s"              "netstat-s.txt"
 run "lsmod" ""                  "lsmod.txt"
 run "ps" "aux"                  "ps-aux.txt"
 run "dmidecode" "--type system" "dmidecode.txt"
@@ -109,6 +111,7 @@ run "/opt/netronome/bin/nfp-media" "" "nfp-media.txt"
 run "/opt/netronome/bin/nfp-programmables" "" "nfp-programmables.txt"
 run "/opt/netronome/bin/nfp-arm" "-D" "nfp-arm-D.txt"
 run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
+run "/opt/netronome/bin/nfp-res" "-L" "nfp-res-locks.txt"
 
 run "ovs-dpctl" "dump-flows -m" "ovs-dpctl-flows.txt"
 run "ovs-ctl" "status troubleshoot -C" "ovs-ctl-status-troubleshoot.txt"
@@ -117,6 +120,8 @@ run "nfp" "-m mac show port info 0 0" "nfp-mac-0-0-first.txt"
 run "nfp" "-m mac show port info 0 4" "nfp-mac-0-0-first.txt"
 run "nfp" "-m mac show port info 0 0" "nfp-mac-0-0-second.txt"
 run "nfp" "-m mac show port info 0 4" "nfp-mac-0-0-second.txt"
+
+run "ovs-appctl" "bond/list" "bond-list.txt"
 
 run "/opt/netronome/bin/virtio_relay_stats" "" "nfp-virtio-stats.txt"
 
@@ -147,14 +152,14 @@ done
 virsh="$(which virsh)"
 if [ "$virsh" != "" ]; then
     for vmname in $(virsh list --all --name) ; do
-        vmdir="$capdir/vms/$vmname"
+        vmdir="$capdir/virsh/vms/$vmname"
         mkdir -p $vmdir
         virsh dumpxml $vmname > $vmdir/config.xml
         virsh dominfo $vmname > $vmdir/dominfo.txt
         virsh vcpuinfo $vmname > $vmdir/vcpuinfo.txt
     done
     for netname in $(virsh net-list --name) ; do
-        netdir="$capdir/net/$netname"
+        netdir="$capdir/virsh/net/$netname"
         mkdir -p $netdir
         virsh net-dumpxml $netname > $netdir/config.xml
         virsh net-dhcp-leases $netname > $netdir/leases.txt
@@ -183,11 +188,28 @@ if [ -x /sbin/ethtool ]; then
     iflist=$(cat /proc/net/dev \
         | sed -rn 's/^\s*(\S+):.*$/\1/p')
     ifdir="$capdir/ethtool"
-    mkdir -p $ifdir
+    mkdir -p $ifdir/info $ifdir/features $ifdir/stats
     for ifname in $iflist ; do
-        ethtool -i $ifname > $ifdir/info-$ifname.txt 2>&1
-        ethtool -k $ifname > $ifdir/features-$ifname.txt 2>&1
-        ethtool -S $ifname > $ifdir/stats-$ifname.txt 2>&1
+        ethtool -i $ifname > $ifdir/info/$ifname.txt 2>&1
+        ethtool -k $ifname > $ifdir/features/$ifname.txt 2>&1
+        ethtool -S $ifname > $ifdir/stats/$ifname.txt 2>&1
+    done
+fi
+
+########################################################
+# Capture Link-Aggregation (bonding) Status
+
+listfile="$capdir/bond-list.txt"
+if [ -f $listfile ]; then
+    mkdir -p $capdir/bond
+    bondlist=$(cat $listfile \
+        | tail -n +2 \
+        | cut -f 1)
+    for bondname in $bondlist ; do
+        ovs-appctl bond/show $bondname 2>&1 \
+            > $capdir/bond/$bondname-bond.txt
+        ovs-appctl lacp/show $bondname 2>&1 \
+            > $capdir/bond/$bondname-lacp.txt
     done
 fi
 
@@ -219,6 +241,8 @@ fi
 tar cz -C $tmpdir -f $HOME/$capname.tgz $capname
 
 /bin/rm -rf $tmpdir
+
+echo "System Inventory Capture file: $HOME/$capname.tgz"
 
 ########################################################
 exit 0
