@@ -11,6 +11,7 @@
 #include <rte_lcore.h>
 
 #include "defines.h"
+#include "dbgmsg.h"
 
 /**********************************************************************/
 #define TX_QUEUE_SIZE_SHIFT  (6)
@@ -29,7 +30,10 @@ typedef struct {
 RTE_DECLARE_PER_LCORE(tx_queue_set_t *, _queue_set);
 
 /**********************************************************************/
-#define TX_RING_SIZE 256
+
+#define TX_RING_SIZE 1024
+
+#define TX_BURST_SIZE 32
 
 /*
  * Each thread has its own private tx_ring_set_t
@@ -71,6 +75,8 @@ tx_queue_flush (tx_queue_set_t *qp, int prtidx, int count)
     struct rte_mbuf **mbufs = tx_queue_port_mbuf(qp, prtidx);
     int enqcnt = rte_ring_enqueue_burst(ring, (void *) mbufs, count);
     if (unlikely(enqcnt < count)) {
+        dbgmsg(DEBUG, nopkt, "Ring FULL (Prt %u, Core %u, Disc %u)",
+            prtidx, rte_lcore_id(), count - enqcnt);
         pktmbuf_free_bulk(&mbufs[enqcnt], count - enqcnt);
     }
     qp->pktcnt[prtidx] = 0;
@@ -89,7 +95,7 @@ tx_pkt_enqueue (int prtidx, struct rte_mbuf *mbuf)
     int pos = qsp->pktcnt[prtidx];
     int mbufidx = (prtidx << TX_QUEUE_SIZE_SHIFT) + pos;
     qsp->mbufs[mbufidx] = mbuf;
-    if (pos == (TX_QUEUE_SIZE - 1)) {
+    if (unlikely(pos == (TX_QUEUE_SIZE - 1))) {
         tx_queue_flush(qsp, prtidx, TX_QUEUE_SIZE);
     } else {
         qsp->pktcnt[prtidx] = pos + 1;

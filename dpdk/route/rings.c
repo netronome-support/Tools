@@ -128,18 +128,25 @@ flush_thread_ring_set (tx_ring_set_t *trs)
 {
     int cnt = trs->count;
     int idx;
-    struct rte_mbuf *mbufs[TX_RING_SIZE];
+    struct rte_mbuf *mbufs[TX_BURST_SIZE];
     for (idx = 0 ; idx < cnt ; idx++) {
         tx_ring_info_t *ri = &trs->ri[idx];
         struct rte_ring *ring = ri->ring;
         if (rte_ring_empty(ring))
             continue;
-        uint16_t pktcnt = rte_ring_mc_dequeue_burst(ring,
-            (void **) mbufs, TX_RING_SIZE);
-        uint16_t sndcnt = rte_eth_tx_burst(ri->prtidx, 0, mbufs, pktcnt);
-        if (unlikely(sndcnt < pktcnt)) {
-            pktmbuf_free_bulk(&mbufs[sndcnt], pktcnt - sndcnt);
-        }
+        int pktcnt, sndcnt;
+        do {
+            pktcnt = rte_ring_mc_dequeue_burst(ring, (void **) mbufs,
+                TX_BURST_SIZE);
+            sndcnt = rte_eth_tx_burst(ri->prtidx, 0, mbufs, pktcnt);
+            if (unlikely(sndcnt < pktcnt)) {
+                dbgmsg(DEBUG, nopkt,
+                    "TX FULL (Prt %u, Disc %u)",
+                    ri->prtidx, sndcnt < pktcnt);
+                pktmbuf_free_bulk(&mbufs[sndcnt], pktcnt - sndcnt);
+                break;
+            }
+        } while (sndcnt == TX_BURST_SIZE);
     }
 }
 

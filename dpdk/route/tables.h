@@ -68,11 +68,11 @@ rt_dt_lookup (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr)
     uint32_t idx = rt_dt_hash(rdidx, ipaddr);
     rt_dt_route_t *hd = &dt[idx];
 
-    if ((hd->rdidx == rdidx) && (hd->ipaddr == ipaddr))
+    if (likely((hd->rdidx == rdidx) && (hd->ipaddr == ipaddr)))
         return hd;
 
     rt_dt_route_t *sp = hd->next;
-    while (sp != hd) {
+    while (likely(sp != hd)) {
         if ((sp->rdidx == rdidx) && (sp->ipaddr == ipaddr))
             return sp;
         sp = sp->next;

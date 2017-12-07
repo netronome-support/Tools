@@ -7,7 +7,7 @@
 #include <rte_atomic.h>
 
 #include "defines.h"
-#include "pktutils.h"
+#include "pktdefs.h"
 
 typedef struct {
     int log_level;
@@ -41,7 +41,9 @@ extern rt_pkt_t nopkt;
 #define dbgmsg(level, pkt, fmt, ...) \
 do { \
     static dbgmsg_state_t dbgstate = DBGMSG_INIT(64,1); \
-    f_dbgmsg(&dbgstate, level, pkt, fmt, ##__VA_ARGS__); \
+    if ((level) <= dbgmsg_globals.log_level) { \
+        f_dbgmsg(&dbgstate, level, pkt, fmt, ##__VA_ARGS__); \
+    } \
 } while(0)
 
 static inline const char *

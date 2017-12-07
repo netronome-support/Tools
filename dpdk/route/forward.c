@@ -179,8 +179,8 @@ rt_pkt_ipv4_process (rt_pkt_t pkt)
     rt_ipv4_addr_t ipda = ntohl(*PTR(pkt.pp.l3, uint32_t, 16));
     /* Look-up in Direct (fast) Table */
     rt_dt_route_t *drp = rt_dt_lookup(pkt.rdidx, ipda);
-    if (drp != NULL) {
-        if (drp->flags) {
+    if (likely(drp != NULL)) {
+        if (unlikely(drp->flags)) {
             if (drp->flags & RT_DT_F_DISCARD) {
                 rt_pkt_discard(pkt);
                 return;

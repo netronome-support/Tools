@@ -6,6 +6,7 @@
 
 #include "defines.h"
 #include "dbgmsg.h"
+#include "pktutils.h"
 
 FILE *rt_log_fd = NULL;
 rt_pkt_t nopkt;
@@ -73,9 +74,6 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
     int n = 0;
 
     if (rt_log_fd == NULL)
-        return;
-
-    if (level > dbgmsg_globals.log_level)
         return;
 
     if (dbg_check_credits(dbgstate) == 0)

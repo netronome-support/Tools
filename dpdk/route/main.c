@@ -93,11 +93,11 @@ static int ping_nexthops = 0;
  * Configurable number of RX/TX ring descriptors
  */
 #define RTE_TEST_RX_DESC_DEFAULT 2048
-#define RTE_TEST_TX_DESC_DEFAULT  512
+#define RTE_TEST_TX_DESC_DEFAULT 2048
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 
-#define RTE_MBUF_DESC_MARGIN     8192
+#define RTE_MBUF_DESC_MARGIN    16384
 
 /* ethernet addresses of ports */
 static struct ether_addr rt_ports_eth_addr[RTE_MAX_ETHPORTS];
