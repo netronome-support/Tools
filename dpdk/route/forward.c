@@ -239,8 +239,9 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
             dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
                 ethtype);
         } else {
+            char ts[32];
             dbgmsg(DEBUG, pkt, "wrong destination MAC %s",
-                rt_hwaddr_str(pkt.eth->dst));
+                rt_hwaddr_str(ts, pkt.eth->dst));
         }
     } else {
         /* Broadcast or Multicast */

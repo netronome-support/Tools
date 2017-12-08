@@ -38,13 +38,18 @@ extern void f_dbgmsg (dbgmsg_state_t *,
 
 extern rt_pkt_t nopkt;
 
-#define dbgmsg(level, pkt, fmt, ...) \
+#define CHK_LOGLEVEL(level) ((level) <= dbgmsg_globals.log_level)
+
+#define dbgmsg_rate(level, maxcredits, rate, pkt, fmt, ...) \
 do { \
-    static dbgmsg_state_t dbgstate = DBGMSG_INIT(64,1); \
-    if ((level) <= dbgmsg_globals.log_level) { \
+    static dbgmsg_state_t dbgstate = DBGMSG_INIT((maxcredits),(rate)); \
+    if (CHK_LOGLEVEL(level)) { \
         f_dbgmsg(&dbgstate, level, pkt, fmt, ##__VA_ARGS__); \
     } \
 } while(0)
+
+#define dbgmsg(level, pkt, fmt, ...) \
+    dbgmsg_rate(level, 64, 1, pkt, fmt, ##__VA_ARGS__);
 
 static inline const char *
 rt_ipaddr_str (char *str, rt_ipv4_addr_t ipaddr)
@@ -64,9 +69,8 @@ rt_ipaddr_nr_str (rt_ipv4_addr_t ipaddr)
 }
 
 static inline const char *
-rt_hwaddr_str (const rt_eth_addr_t hwaddr)
+rt_hwaddr_str (char *str, const rt_eth_addr_t hwaddr)
 {
-    static char str[32];
     const uint8_t *a = (const uint8_t *) hwaddr;
     sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
         a[0], a[1], a[2], a[3], a[4], a[5]);

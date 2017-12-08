@@ -51,7 +51,7 @@ typedef struct rt_lpm_s {
 #define RT_LPM_F_IS_NEXTHOP     (1 << 5)
 #define RT_LPM_F_DISCARD        (1 << 6)
 
-#define RT_DT_SIZE 1023
+#define RT_DT_SIZE 65535
 extern rt_dt_route_t dt[RT_DT_SIZE];
 
 static inline uint32_t

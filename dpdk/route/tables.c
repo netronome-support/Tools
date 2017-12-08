@@ -58,6 +58,12 @@ rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
 
     sem_post(&rt_dt_lock);
 
+    if (CHK_LOGLEVEL(DEBUG)) {
+        char tmpstr[128];
+        rt_dt_sprintf(tmpstr, np);
+        dbgmsg_rate(DEBUG, 1024, 4, nopkt, "Creating Direct Route %s", tmpstr);
+    }
+
     if (ap != NULL) {
         free(ap);
     }
@@ -81,11 +87,11 @@ int
 rt_dt_sprintf (char *str, const rt_dt_route_t *dt)
 {
     int n = 0;
-    char tmpstr[128];
+    char ts1[32], ts2[32];
     n += sprintf(&str[n], "(%u) %s - P: %u D: %s", dt->rdidx,
-        rt_ipaddr_str(tmpstr, dt->ipaddr), dt->port,
-        rt_hwaddr_str(*dt->eth.dst));
-    n += sprintf(&str[n], " S: %s", rt_hwaddr_str(dt->eth.src));
+        rt_ipaddr_str(ts1, dt->ipaddr), dt->port,
+        rt_hwaddr_str(ts2, *dt->eth.dst));
+    n += sprintf(&str[n], " S: %s", rt_hwaddr_str(ts1, dt->eth.src));
     return n;
 }
 
@@ -225,8 +231,9 @@ rt_lpm_sprintf (char *str, const rt_lpm_t *rt)
         n += sprintf(&str[n], " [%s]", tmpstr);
     }
     if (flags & RT_LPM_F_HAS_HWADDR) {
+        char ts[32];
         n += sprintf(&str[n], " %s",
-            rt_hwaddr_str(rt->hwaddr));
+            rt_hwaddr_str(ts, rt->hwaddr));
     }
     if (flags & RT_LPM_F_LOCAL) {
         n += sprintf(&str[n], " LOCAL");

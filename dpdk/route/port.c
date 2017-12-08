@@ -16,7 +16,8 @@ rt_port_create (rt_port_index_t port, void *hwaddr, void *tx_buffer)
     pi->idx = port;
     memcpy(&pi->hwaddr, hwaddr, 6);
     pi->tx_buffer = tx_buffer;
-    dbgmsg(INFO, nopkt, "Port %d: %s", port, rt_hwaddr_str(hwaddr));
+    char ts[32];
+    dbgmsg(INFO, nopkt, "Port %d: %s", port, rt_hwaddr_str(ts, hwaddr));
 }
 
 void

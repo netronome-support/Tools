@@ -194,7 +194,7 @@ int
 add_static_arp_entry (const char *argstr)
 {
     /* Format: [<rdidx>#]<IPv4 addr>@<next hop MAC addr> */
-    char tmpstr[128];
+    char tmpstr[128], ts0[32];
     int rc;
     strncpy(tmpstr, argstr, 127);
     argstr = tmpstr;
@@ -241,7 +241,7 @@ add_static_arp_entry (const char *argstr)
     memcpy(rt->hwaddr, hwaddr, 6);
     rt->flags |= RT_LPM_F_HAS_HWADDR;
     dbgmsg(CONF, nopkt, "Static ARP Entry (%u) %s -> %s", rdidx,
-        rt_ipaddr_nr_str(nhipa), rt_hwaddr_str(hwaddr));
+        rt_ipaddr_nr_str(nhipa), rt_hwaddr_str(ts0, hwaddr));
     return 0;
 }
 

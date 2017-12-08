@@ -91,9 +91,10 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
         rt = rt_lpm_host_create(pkt.rdidx, ipaddr, pi, 0);
     } 
 
+    char ts[32];
     dbgmsg(CONF, nopkt, "ARP learned (%u) %s : %s",
        pkt.rdidx, rt_ipaddr_nr_str(ipaddr),
-       rt_hwaddr_str(hwaddr));
+       rt_hwaddr_str(ts, hwaddr));
 
     rt_lpm_set_hwaddr(rt, hwaddr);
     rt_arp_flush_packet(rt);
@@ -159,11 +160,11 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
         return;
     }
 
-    char t0[32], t1[32];
+    char t0[32], t1[32], t2[32];
     dbgmsg(INFO, pkt, "ARP reply received from %s (%s) for (%u) %s",
         rt_ipaddr_str(t0, ap.s_ip_addr),
-        rt_hwaddr_str(ap.s_hw_addr), rdidx,
-        rt_ipaddr_str(t1, ap.t_ip_addr));
+        rt_hwaddr_str(t1, ap.s_hw_addr), rdidx,
+        rt_ipaddr_str(t2, ap.t_ip_addr));
 
     rt_lpm_set_hwaddr(rt, ap.s_hw_addr);
     rt_arp_flush_packet(rt);
