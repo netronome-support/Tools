@@ -45,11 +45,13 @@ list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
 
 ########################################################
-nfplist=$(find /sys/bus/pci/drivers/nfp -type l -name '*:*:*.*')
-for nfpdir in $nfplist ; do
-    list+=( "$nfpdir/numa_node" )
-    list+=( "$nfpdir/irq" )
-done
+if [ -d /sys/bus/pci/drivers/nfp ]; then
+    nfplist=$(find /sys/bus/pci/drivers/nfp -type l -name '*:*:*.*')
+    for nfpdir in $nfplist ; do
+        list+=( "$nfpdir/numa_node" )
+        list+=( "$nfpdir/irq" )
+    done
+fi
 
 ########################################################
 for fname in ${list[@]} ; do
@@ -123,8 +125,6 @@ run "nfp" "-m mac show port info 0 4" "nfp-mac-0-0-second.txt"
 
 run "ovs-appctl" "bond/list" "bond-list.txt"
 
-run "/opt/netronome/bin/virtio_relay_stats" "" "nfp-virtio-stats.txt"
-
 run "ovs-vsctl" "show" "ovs-vsctl-show.txt"
 
 ########################################################
@@ -147,6 +147,12 @@ for pid in $(pgrep virtiorelayd) ; do
         | tr '\0' ' ' \
         > $capdir/virtiorelayd-$pid-cmdline.txt
 done
+
+########################################################
+tool="/opt/netronome/bin/virtio_relay_stats"
+if [ -x $tool ] && [ "$(pgrep virtiorelayd)" != "" ]; then
+    $tool > $capdir/nfp-virtio-stats.txt
+fi
 
 ########################################################
 virsh="$(which virsh)"
