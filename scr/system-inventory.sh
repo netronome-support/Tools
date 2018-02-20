@@ -119,9 +119,9 @@ run "ovs-dpctl" "dump-flows -m" "ovs-dpctl-flows.txt"
 run "ovs-ctl" "status troubleshoot -C" "ovs-ctl-status-troubleshoot.txt"
 
 run "nfp" "-m mac show port info 0 0" "nfp-mac-0-0-first.txt"
-run "nfp" "-m mac show port info 0 4" "nfp-mac-0-0-first.txt"
+run "nfp" "-m mac show port info 0 4" "nfp-mac-0-4-first.txt"
 run "nfp" "-m mac show port info 0 0" "nfp-mac-0-0-second.txt"
-run "nfp" "-m mac show port info 0 4" "nfp-mac-0-0-second.txt"
+run "nfp" "-m mac show port info 0 4" "nfp-mac-0-4-second.txt"
 
 run "ovs-appctl" "bond/list" "bond-list.txt"
 
