@@ -4,6 +4,14 @@ url="https://github.com/netronome-support/Tools"
 
 ########################################
 
+if [ ! -f /etc/dpdk.conf ]; then
+    echo "ERROR: DPDK settings expected in /etc/dpdk.conf"
+    echo " - use install-dpdk.sh <version> to install DPDK"
+    exit -1
+fi
+
+########################################
+
 function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
@@ -43,8 +51,6 @@ fi
 ########################################
 
 . /etc/dpdk.conf
-
-    check_status "failed to read DPDK configuration"
 
 ########################################
 

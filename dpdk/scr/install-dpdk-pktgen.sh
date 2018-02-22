@@ -22,6 +22,7 @@ srcdir="/opt/src"
 
 if [ ! -f /etc/dpdk.conf ]; then
     echo "ERROR: DPDK settings expected in /etc/dpdk.conf"
+    echo " - use install-dpdk.sh <version> to install DPDK"
     exit -1
 fi
 

@@ -20,8 +20,10 @@ fi
 show "Hostname" "$(hostname)"
 
 ########################################################################
-. /etc/os-release || exit -1
-show "OS" "$NAME $VERSION"
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    show "OS" "$NAME $VERSION"
+fi
 
 ########################################################################
 show "Kernel" "$(uname -r)"
@@ -122,7 +124,7 @@ if [ "$viopid" != "" ]; then
 fi
 
 ########################################################################
-virsh="$(which virsh)"
+virsh="$(which virsh 2> /dev/null)"
 if [ "$virsh" != "" ]; then
   show "VM CPU Usage" ""
   for inst in $(virsh list --name) ; do
