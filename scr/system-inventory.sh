@@ -96,7 +96,7 @@ run "route" "-n"                "route-n.txt"
 run "netstat" "-s"              "netstat-s.txt"
 run "lsmod" ""                  "lsmod.txt"
 run "ps" "aux"                  "ps-aux.txt"
-run "dmidecode" "--type system" "dmidecode.txt"
+run "dmidecode" ""              "dmidecode.txt"
 run "lshw" ""                   "lshw.txt"
 run "printenv" ""               "printenv.txt"
 
