@@ -71,7 +71,7 @@ function run () {
     if [ -x $cmd ]; then
         $cmd $args > $capdir/$fname 2>&1
     else
-        tool=$(which $cmd)
+        tool=$(which $cmd 2> /dev/null)
         if [ -x "$tool" ]; then
             $tool $args > $capdir/$fname 2>&1
         else
