@@ -133,7 +133,7 @@ nscnt=$(lspci -d 19ee: | wc -l)
 if [ $nscnt -lt 1 ]; then
     echo "ERROR: card missing" > $capdir/pci-patch.txt
 else
-    check=$(setpci -d 19ee:4000 0xFFC.L | sed '2,$d')
+    check=$(setpci -d 19ee: 0xFFC.L | sed '2,$d')
     if [ "$check" != "ffffffff" ]; then
         echo "WARNING: patch MISSING" > $capdir/pci-patch.txt
     else
