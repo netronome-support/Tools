@@ -103,6 +103,7 @@ run "printenv" ""               "printenv.txt"
 run "virsh" "--version"         "virsh-version.txt"
 run "kvm" "--version"           "kvm-version.txt"
 run "/usr/libexec/qemu-kvm" "--version" "qemu-kvm-version.txt"
+run "qemu-system-x86_64" "--version" "qemu-system-version.txt"
 
 run "getenforce" "" "selinux-getenforce.txt"
 
