@@ -311,6 +311,8 @@ rt_main_loop (void)
                             rt_lpm_gen_icmp_requests();
                         }
 
+                        rt_port_periodic();
+
                         /* reset the timer */
                         timer_tsc = 0;
                     }

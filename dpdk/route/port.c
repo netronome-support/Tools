@@ -4,6 +4,7 @@
 #include "tables.h"
 #include "port.h"
 #include "dbgmsg.h"
+#include "functions.h"
 
 rt_port_info_t rt_port_table[RT_PORT_MAX];
 
@@ -146,6 +147,20 @@ log_port_lcore_assignment (uint32_t portmask)
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         dbgmsg(CONF, nopkt, "Port %u lcore assignment: RX: %u, TX: %u",
             prtidx, pi->rx_lcore, pi->tx_lcore);
+    }
+}
+
+void
+rt_port_periodic (void)
+{
+    rt_port_index_t prtidx;
+    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+        rt_port_info_t *pi = rt_port_lookup(prtidx);
+        if (pi->flags & RT_PORT_F_EXIST) {
+            if (pi->flags & RT_PORT_F_GRATARP) {
+                rt_arp_send_gratuitous(pi);
+            }
+        }
     }
 }
 

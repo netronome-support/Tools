@@ -8,6 +8,61 @@
 #include "functions.h"
 #include "dbgmsg.h"
 
+typedef struct {
+    const char *name;
+    enum { FLAG, INTEGER, STRING } type;
+    uint8_t index;
+    void *ptr;
+} opt_syntax_t;
+
+static const opt_syntax_t *
+opt_syntax_find (const opt_syntax_t *osp, const char *keyword)
+{
+    int i;
+    for (i = 0 ; osp[i].name != NULL ; i++) {
+        if (strcasecmp(osp[i].name, keyword) == 0)
+            return &osp[i];
+    }
+    return NULL;
+}
+
+
+static int
+parse_options (char *optstr, uint64_t *flags, opt_syntax_t *osp)
+{
+    while (optstr != NULL) {
+        char *nxtopt = NULL;
+        char *comma = index(optstr, ',');
+        if (comma != NULL) {
+            nxtopt = &comma[1];
+            *comma = 0;
+        }
+        char *eqsign = index(optstr, '=');
+        char *valstr = NULL;
+        if (eqsign != NULL) {
+            valstr = &eqsign[1];
+            eqsign = 0;
+        }
+        const opt_syntax_t *sp = opt_syntax_find(osp, optstr);
+        if (sp == NULL) {
+            fprintf(stderr, "ERROR: could not parse '%s' option\n", optstr);
+            return -1;
+        }
+        if (flags != NULL)
+            *flags |= (1 << sp->index);
+        switch (sp->type) {
+            case INTEGER:
+                break;
+            case STRING:
+                *((char **) sp->ptr) = valstr;
+                break;
+            default:
+                break;
+        }
+        optstr = nxtopt;
+    }
+    return 0;
+}
 
 int
 parse_iface_addr (const char *arg)
@@ -32,6 +87,8 @@ parse_iface_addr (const char *arg)
         goto Error;
     }
     argstr = &colon[1];
+    /* Get a pointer to the port info structure */
+    rt_port_info_t *pi = rt_port_lookup(port);
     /* Parse Routing Domain */
     char *numch = index(argstr, '#');
     if (numch != NULL) {
@@ -43,6 +100,13 @@ parse_iface_addr (const char *arg)
         }
         argstr = &numch[1];
         rt_port_set_routing_domain(port, rdidx);
+    }
+    /* Check for options (starting with a ',') */
+    char *optstr = NULL;
+    char *comma = index(argstr, ',');
+    if (comma != NULL) {
+        *comma = 0;
+        optstr = &comma[1];
     }
     if (strlen(argstr) == 0)
         return 0;
@@ -61,6 +125,19 @@ parse_iface_addr (const char *arg)
     ipaddr = ntohl(ipaddr);
     if (ipaddr != 0) {
         rt_port_set_ipv4_addr(port, ipaddr, plen);
+    }
+    if (optstr != NULL) {
+        opt_syntax_t opts[] = {
+            { "GRATARP", FLAG, 1, NULL },
+            { NULL, 0, 0, NULL },
+        };
+        uint64_t flags = 0;
+        int rc = parse_options(optstr, &flags, opts);
+        if (rc < 0)
+            return -1;
+        if (flags & (1 << 1)) { /* GRATARP */
+            pi->flags |= RT_PORT_F_GRATARP;
+        }
     }
     return 0;
 

@@ -14,6 +14,7 @@ rt_lpm_t *rt_resolve_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t nhipa);
 
 void rt_arp_process (rt_pkt_t pkt);
 void rt_arp_generate (rt_pkt_t pkt, rt_ipv4_addr_t ipda, rt_lpm_t *rt);
+void rt_arp_send_gratuitous (rt_port_info_t *pi);
 
 void rt_icmp_process (rt_pkt_t pkt);
 void rt_icmp_gen_request (rt_rd_t rdidx, rt_ipv4_addr_t ipda);

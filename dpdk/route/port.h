@@ -41,6 +41,7 @@ typedef struct {
 
 #define RT_PORT_F_EXIST         (1 << 0)
 #define RT_PORT_F_PROMISC       (1 << 1)
+#define RT_PORT_F_GRATARP       (1 << 2)
 
 #define RT_PORT_LCORE_UNASSIGNED    (65535)
 
@@ -72,6 +73,7 @@ void rt_port_assign_thread (int prtidx, int direction, int lcore);
 void rt_lcore_default_assign (int dir, int cnt, uint32_t mask);
 rx_port_list_t *create_thread_rx_port_list (void);
 void log_port_lcore_assignment (uint32_t portmask);
+void rt_port_periodic (void);
 
 extern void rt_port_table_init (void);
 

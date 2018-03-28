@@ -264,6 +264,27 @@ rt_arp_request (rt_port_info_t *pi, rt_ipv4_addr_t ipda)
 }
 
 void
+rt_arp_send_gratuitous (rt_port_info_t *pi)
+{
+    /* Create new packet for ARP request */
+    rt_pkt_t pkt;
+    rt_pkt_create(&pkt);
+    pkt.pi = pi;
+    pkt.rdidx = pi->rdidx;
+
+    rt_pkt_set_hw_addrs(pkt, pi, rt_eth_bcast_hw_addr);
+    /* Set ETHTYPE to ARP */
+    pkt.eth->ethtype = htons(0x0806);
+    pkt.pp.l3 = &((uint8_t *) pkt.eth)[14];
+
+    rt_arp_request_compose(pi, pi->ipaddr, pkt.pp.l3);
+    rt_pkt_set_length(pkt, 14 + sizeof(rt_pkt_arp_t));
+    rt_pkt_send(pkt, pi);
+
+    dbgmsg(INFO, pkt, "ARP generated Grat-ARP for port %u", pi->idx);
+}
+
+void
 rt_arp_generate (rt_pkt_t pkt, rt_ipv4_addr_t ipda, rt_lpm_t *rt)
 {
     rt_port_info_t *pi = rt->pi;
