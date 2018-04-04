@@ -191,6 +191,35 @@ for logfile in $loglist ; do
 done
 
 ########################################################
+# Capture listing of initramfs files
+
+kvers=$(uname -r)
+irflist=$(find /boot -name "init*$kvers*")
+for irfname in $irflist ; do
+    run "lsinitramfs" "$irfname" "$irfname.list"
+done
+
+########################################################
+# Capture listing of Netronome firmware files
+
+if [ -d /lib/firmware/netronome ]; then
+    ls -lR /lib/firmware/netronome \
+        > $capdir/firmware.list
+fi
+
+########################################################
+# Capture Kernel Module Information
+
+midir="$capdir/modinfo"
+mkdir -p $midir
+modlist=$(lsmod \
+    | tail -n +2 \
+    | sed -rn 's/^(\S+)\s.*$/\1/p')
+for modname in $modlist ; do
+    modinfo $modname > $midir/$modname.info
+done
+
+########################################################
 if [ -x /sbin/ethtool ]; then
     iflist=$(cat /proc/net/dev \
         | sed -rn 's/^\s*(\S+):.*$/\1/p')
@@ -221,7 +250,7 @@ if [ -f $listfile ]; then
 fi
 
 ########################################################
-if [ -x $(which ovs-vsctl) ]; then
+if [ -x "$(which ovs-vsctl)" ]; then
     for brname in $(ovs-vsctl list-br) ; do
         brdir="$capdir/ovs/$brname"
         mkdir -p $brdir
@@ -236,6 +265,8 @@ if [ -x $(which ovs-vsctl) ]; then
         ovs-appctl fdb/show $brname \
             > $brdir/ofctl-fdb-show.txt
     done
+    ovs-dpctl dump-flows \
+        > $capdir/ovs/dpctl-flows.txt
 fi
         
 ########################################################
