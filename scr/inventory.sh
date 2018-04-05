@@ -35,20 +35,73 @@ prod=$(dmidecode --type system | sed -rn 's/^\s*Product Name: (.*)$/\1/p')
 show "Server" "$manu $prod"
 
 ########################################################################
+vendor=$(dmidecode --type bios   | sed -rn 's/^\s*Vendor: (.*)$/\1/p')
+version=$(dmidecode --type bios  | sed -rn 's/^\s*Version: (.*)$/\1/p')
+rel_date=$(dmidecode --type bios | sed -rn 's/^\s*Release Date: (.*)$/\1/p')
+revision=$(dmidecode --type bios | sed -rn 's/^\s*BIOS Revision: (.*)$/\1/p')
+
+show "BIOS" "$vendor Version $version ($rel_date); Revision $revision"
+
+########################################################################
 cpu=$(lscpu | sed -rn 's/^Vendor ID:\s+(\S.*)$/\1/p')
 cpu_model=$(lscpu | sed -rn 's/^Model name:\s+(\S.*)$/\1/p')
-[ "$cpu_model" != "" ] && cpu="$cpu $cpu_model"
+if [ "$cpu_model" == "" ]; then
+  cpu_version=$(dmidecode --type processor \
+    | sed -rn 's/^\s*Version: (.*)$/\1/p' \
+    | head -1)
+  cpu="$cpu $cpu_version"
+else
+  cpu="$cpu $cpu_model"
+fi
 cpu_freq=$(lscpu | sed -rn 's/^CPU MHz:\s+(\S.*)$/\1/p')
 [ "$cpu_freq" != "" ] && cpu="$cpu ${cpu_freq}MHz"
+
+show "CPU" "$cpu"
+
+########################################################################
 cps=$(lscpu | sed -rn 's/^Core.*per socket:\s+(\S.*)$/\1/p')
 scn=$(lscpu | sed -rn 's/^Socket.*:\s+(\S.*)$/\1/p')
 
-show "CPU" \
-  "$cpu ($scn sockets, $cps cores/socket)"
+show "NUMA" "$scn sockets, $cps cores/socket"
 
 ########################################################################
 mem=$(cat /proc/meminfo | sed -rn 's/^MemTotal:\s+(\S.*)$/\1/p')
 show "Memory" "$mem"
+
+########################################################################
+function extract () {
+    local varname="$1"
+    local field="$2"
+    local value=$(echo "$line" \
+        | sed -rn 's/^.*@@@'"$field"':\s*([^@]+)@@@.*$/\1/p')
+    printf -v $varname "%s" "$value"
+}
+
+dmidecode --type memory \
+    | awk '{printf "%s@@@", $0}' \
+    | sed -r 's/@@@@@@/@@@\n@@@/g' \
+    | sed -r 's/@@@\s*/@@@/g' \
+    | grep -E "^@@@Handle" \
+    | grep -E "@@@Memory Device@@@" \
+    | grep -E "@@@Form Factor: DIMM@@@" \
+    | grep -E "@@@Data Width: [0-9]+ bits@@@" \
+    | while read line ;
+do
+    #extract "m_width_t"     "Total Width"
+    extract "m_width_d"     "Data Width"
+    extract "m_size"        "Size"
+    extract "m_locator"     "Locator"
+    #extract "m_manu"        "Manufacturer"
+    extract "m_type"        "Type"
+    extract "m_speed"       "Speed"
+    extract "m_rank"        "Rank"
+    #extract "m_part_n"      "Part Number"
+    extract "m_cfg_clock"   "Configured Clock Speed"
+    extract "m_max_clock"    "Configured Voltage"
+    info="$m_width_d, $m_size, $m_locator"
+    info="$info, $m_cfg_clock (max $m_speed), rank $m_rank"
+    show "DIMM" "$info"
+done
 
 ########################################################################
 ovsctl="/opt/netronome/bin/ovs-ctl"
@@ -64,7 +117,7 @@ if [ -x $hwinfo ]; then
   fn="/tmp/nfp-hwinfo.txt"
   $hwinfo > $fn 2> /dev/null
   if [ $? -ne 0 ]; then
-    printf "%-10s %s\n" "NFP" "MISSING!!"
+    show "NFP" "MISSING!!"
     nfp_present="missing"
   else
     nfp_present="yes"

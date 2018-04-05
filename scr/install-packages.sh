@@ -61,7 +61,7 @@ if [ -f /etc/os-release ]; then
         | sed -rn 's/^ID=//p' \
         | tr -d '"')"
     OS_ID_LIKE="$(cat /etc/os-release \
-        | sed -rn 's/^ID=//p' \
+        | sed -rn 's/^ID_LIKE=//p' \
         | tr -d '"')"
 fi
 
@@ -112,7 +112,7 @@ function identify_package () {
                 pkgname="$f_pkgname"
                 return
             fi
-            for id in "$OS_ID_LIKE" ; do
+            for id in $OS_ID_LIKE ; do
                 if [ "$f_osname" == "$id" ]; then
                     pkg_like="$f_pkgname"
                 fi
