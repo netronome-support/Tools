@@ -13,6 +13,7 @@ mkdir -p $capdir
 list=()
 list+=( "/etc/hostname" )
 list+=( "/etc/os-release" )
+list+=( "/etc/redhat-release" )
 list+=( "/etc/hosts" )
 list+=( "/etc/fstab" )
 list+=( "/etc/netronome.conf" )
@@ -44,6 +45,9 @@ list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 
 list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
 
+# Save the script into the capture
+list+=( "$0" )
+
 ########################################################
 if [ -d /sys/bus/pci/drivers/nfp ]; then
     nfplist=$(find /sys/bus/pci/drivers/nfp -type l -name '*:*:*.*')
@@ -69,15 +73,18 @@ function run () {
     local args="$2"
     local fname="$3"
     if [ -x $cmd ]; then
-        $cmd $args > $capdir/$fname 2>&1
+        tool="$cmd"
     else
         tool=$(which $cmd 2> /dev/null)
-        if [ -x "$tool" ]; then
-            $tool $args > $capdir/$fname 2>&1
-        else
+        if [ ! -x "$tool" ]; then
             echo "Missing $cmd" >> $capdir/missing-tools.txt
+            return
         fi
     fi
+    ( date +'%Y-%m-%d %H%M%S.%N' ; \
+      echo "  $tool $args" ; \
+    ) >> $capdir/cmd-timing.txt  
+    $tool $args > $capdir/$fname 2>&1
 }
 
 ########################################################
@@ -90,10 +97,8 @@ run "lspci" "-vvv"              "lspci-vvv.txt"
 run "dmesg" ""                  "dmesg.txt"
 run "yum" "list"                "yum-list.txt"
 run "dpkg" "--get-selections"   "dpkg-pkg-list.txt"
-run "ifconfig" ""               "ifconfig.txt"
 run "arp" "-n"                  "arp-n.txt"
 run "route" "-n"                "route-n.txt"
-run "netstat" "-s"              "netstat-s.txt"
 run "lsmod" ""                  "lsmod.txt"
 run "ps" "aux"                  "ps-aux.txt"
 run "dmidecode" ""              "dmidecode.txt"
@@ -117,16 +122,28 @@ run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
 run "/opt/netronome/bin/nfp-res" "-L" "nfp-res-locks.txt"
 
 run "ovs-dpctl" "dump-flows -m" "ovs-dpctl-flows.txt"
-run "ovs-ctl" "status troubleshoot -C" "ovs-ctl-status-troubleshoot.txt"
-
-run "nfp" "-m mac show port info 0 0" "nfp-mac-0-0-first.txt"
-run "nfp" "-m mac show port info 0 4" "nfp-mac-0-4-first.txt"
-run "nfp" "-m mac show port info 0 0" "nfp-mac-0-0-second.txt"
-run "nfp" "-m mac show port info 0 4" "nfp-mac-0-4-second.txt"
 
 run "ovs-appctl" "bond/list" "bond-list.txt"
 
 run "ovs-vsctl" "show" "ovs-vsctl-show.txt"
+
+# Run some commands twice to collect a 'diff':
+for sd in s0 s1 ; do
+    # Note: timing is captured in the 'cmd-timing.txt' file
+    mkdir -p $capdir/$sd
+    # Statistics Sample '0':
+    run "ifconfig" ""               "$sd/ifconfig.txt"
+    run "netstat" "-s"              "$sd/netstat-s.txt"
+    run "nfp" "-m mac show port info 0 0" "$sd/nfp-mac-0-0.txt"
+    run "nfp" "-m mac show port info 0 4" "$sd/nfp-mac-0-4.txt"
+    run "ovs-ctl" "status troubleshoot -C" \
+        "$sd/ovs-ctl-status-troubleshoot.txt"
+    if [ "$(pgrep virtiorelayd)" != "" ]; then
+        run "/opt/netronome/bin/virtio_relay_stats" "" \
+            "$sd/nfp-virtio-stats.txt"
+    fi
+    test "$sd" == "s0" && sleep 1
+done
 
 ########################################################
 
@@ -148,12 +165,6 @@ for pid in $(pgrep virtiorelayd) ; do
         | tr '\0' ' ' \
         > $capdir/virtiorelayd-$pid-cmdline.txt
 done
-
-########################################################
-tool="/opt/netronome/bin/virtio_relay_stats"
-if [ -x $tool ] && [ "$(pgrep virtiorelayd)" != "" ]; then
-    $tool > $capdir/nfp-virtio-stats.txt
-fi
 
 ########################################################
 virsh="$(which virsh)"
