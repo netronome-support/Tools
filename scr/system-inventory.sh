@@ -12,8 +12,10 @@ mkdir -p $capdir
 
 list=()
 list+=( "/etc/hostname" )
-list+=( "/etc/os-release" )
-list+=( "/etc/redhat-release" )
+list+=( "/etc/*-release" )
+list+=( "/etc/network" )
+list+=( "/etc/sysconfig/network-scripts/ifcfg*" )
+list+=( "/etc/networks" )
 list+=( "/etc/hosts" )
 list+=( "/etc/fstab" )
 list+=( "/etc/netronome.conf" )
@@ -58,10 +60,20 @@ if [ -d /sys/bus/pci/drivers/nfp ]; then
 fi
 
 ########################################################
-for fname in ${list[@]} ; do
-    if [ -e $fname ]; then
-        /bin/cp -R --parents $fname \
-            --target-directory $capdir
+copy="/bin/cp --recursive --parents --dereference"
+copy="$copy --target-directory $capdir"
+
+for fname in "${list[@]}" ; do
+    if [[ "${fname/*\**/}" == "" ]]; then
+        # If 'fname' contains a wildcard '*':
+        path=$(echo "$fname" | sed -rn 's#^(\S+)/.*$#\1#p')
+        filt=$(echo "$fname" | sed -rn 's#^\S+/(.*)$#\1#p')
+        flist="$(find $path -name $filt)"
+        for fname in $flist ; do
+            $copy "$fname"
+        done
+    elif [ -e "$fname" ]; then
+        $copy "$fname"
     else
         echo "Missing $fname" >> $capdir/missing-files.txt
     fi
