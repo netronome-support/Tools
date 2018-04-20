@@ -68,10 +68,14 @@ for fname in "${list[@]}" ; do
         # If 'fname' contains a wildcard '*':
         path=$(echo "$fname" | sed -rn 's#^(\S+)/.*$#\1#p')
         filt=$(echo "$fname" | sed -rn 's#^\S+/(.*)$#\1#p')
-        flist="$(find $path -name $filt)"
-        for fname in $flist ; do
-            $copy "$fname"
-        done
+        if [ -d "$path" ]; then
+            flist="$(find $path -name $filt)"
+            for fname in $flist ; do
+                $copy "$fname"
+            done
+        else
+            echo "Missing $path" >> $capdir/missing-files.txt
+        fi
     elif [ -e "$fname" ]; then
         $copy "$fname"
     else
@@ -95,8 +99,13 @@ function run () {
     fi
     ( date +'%Y-%m-%d %H%M%S.%N' ; \
       echo "  $tool $args" ; \
-    ) >> $capdir/cmd-timing.txt  
+    ) >> $capdir/cmd.log  
     $tool $args > $capdir/$fname 2>&1
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "  ERROR Code: $rc" \
+            >> $capdir/cmd.log
+    fi
 }
 
 ########################################################
@@ -132,12 +141,6 @@ run "/opt/netronome/bin/nfp-programmables" "" "nfp-programmables.txt"
 run "/opt/netronome/bin/nfp-arm" "-D" "nfp-arm-D.txt"
 run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
 run "/opt/netronome/bin/nfp-res" "-L" "nfp-res-locks.txt"
-
-run "ovs-dpctl" "dump-flows -m" "ovs-dpctl-flows.txt"
-
-run "ovs-appctl" "bond/list" "bond-list.txt"
-
-run "ovs-vsctl" "show" "ovs-vsctl-show.txt"
 
 # Run some commands twice to collect a 'diff':
 for sd in s0 s1 ; do
@@ -256,26 +259,48 @@ if [ -x /sbin/ethtool ]; then
 fi
 
 ########################################################
+OVS=""
+if which ovs-vsctl > /dev/null 2>&1 ; then
+    mkdir -p $capdir/ovs
+
+    run "ovs-vsctl" "--version" "ovs/vsctl-version.txt"
+
+    if ovs-vsctl show > /dev/null 2>&1 ; then
+        OVS="INSTALLED"
+    fi
+fi
+
+########################################################
+
+if [ "$OVS" != "" ]; then
+    run "ovs-dpctl" "dump-flows -m" "ovs/dpctl-flows.txt"
+
+    run "ovs-appctl" "bond/list" "ovs/bond-list.txt"
+
+    run "ovs-vsctl" "show" "ovs/vsctl-show.txt"
+fi
+
+########################################################
 # Capture Link-Aggregation (bonding) Status
 
 listfile="$capdir/bond-list.txt"
-if [ -f $listfile ]; then
-    mkdir -p $capdir/bond
+if [ -f $listfile ] && [ "$OVS" != "" ]; then
+    mkdir -p $capdir/ovs/bond
     bondlist=$(cat $listfile \
         | tail -n +2 \
         | cut -f 1)
     for bondname in $bondlist ; do
         ovs-appctl bond/show $bondname 2>&1 \
-            > $capdir/bond/$bondname-bond.txt
+            > $capdir/ovs/bond/$bondname-bond.txt
         ovs-appctl lacp/show $bondname 2>&1 \
-            > $capdir/bond/$bondname-lacp.txt
+            > $capdir/ovs/bond/$bondname-lacp.txt
     done
 fi
 
 ########################################################
-if [ -x "$(which ovs-vsctl)" ]; then
+if [ "$OVS" != "" ]; then
     for brname in $(ovs-vsctl list-br) ; do
-        brdir="$capdir/ovs/$brname"
+        brdir="$capdir/ovs/br/$brname"
         mkdir -p $brdir
         ovs-vsctl list-ports  $brname \
             > $brdir/vsctl-ports.txt
@@ -288,8 +313,6 @@ if [ -x "$(which ovs-vsctl)" ]; then
         ovs-appctl fdb/show $brname \
             > $brdir/ofctl-fdb-show.txt
     done
-    ovs-dpctl dump-flows \
-        > $capdir/ovs/dpctl-flows.txt
 fi
         
 ########################################################
