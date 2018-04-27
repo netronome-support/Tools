@@ -43,6 +43,11 @@ list+=( "/proc/version" )
 list+=( "/proc/vmstat" )
 list+=( "/proc/net/dev" )
 
+list+=( "/var/log/upstart/networking.log" )
+list+=( "/var/log/upstart/virtiorelayd.log" )
+list+=( "/var/log/upstart/network-interface-*.log" )
+list+=( "/var/log/upstart/kmod.log" )
+
 list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 
 list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
@@ -117,7 +122,12 @@ run "lspci" ""                  "lspci.txt"
 run "lspci" "-vvv"              "lspci-vvv.txt"
 run "dmesg" ""                  "dmesg.txt"
 run "yum" "list"                "yum-list.txt"
-run "dpkg" "--get-selections"   "dpkg-pkg-list.txt"
+run "dpkg" "--get-selections"   "dpkg-get-selections.txt"
+run "dpkg" "-l"                 "dpkg-l.txt"
+run "ip" "link list"            "ip-link-list.txt"
+run "ip" "addr list"            "ip-addr-list.txt"
+run "ip" "route list"           "ip-route-list.txt"
+run "ip" "neigh list"           "ip-neigh-list.txt"
 run "arp" "-n"                  "arp-n.txt"
 run "route" "-n"                "route-n.txt"
 run "lsmod" ""                  "lsmod.txt"
@@ -147,7 +157,7 @@ for sd in s0 s1 ; do
     # Note: timing is captured in the 'cmd-timing.txt' file
     mkdir -p $capdir/$sd
     # Statistics Sample '0':
-    run "ifconfig" ""               "$sd/ifconfig.txt"
+    run "ifconfig" "-a"             "$sd/ifconfig.txt"
     run "netstat" "-s"              "$sd/netstat-s.txt"
     run "nfp" "-m mac show port info 0 0" "$sd/nfp-mac-0-0.txt"
     run "nfp" "-m mac show port info 0 4" "$sd/nfp-mac-0-4.txt"
@@ -201,9 +211,15 @@ fi
 
 ########################################################
 mkdir -p $capdir/log
+if [ -d /var/log ]; then
+    find /var/log -type f -ls \
+        > $capdir/log/file-list.txt
+fi
 loglist=()
 loglist+=( "syslog" )
 loglist+=( "messages" )
+loglist+=( "kern.log" )
+loglist+=( "boot.log" )
 for logfile in $loglist ; do
     if [ -f "/var/log/$logfile" ]; then
         cat /var/log/$logfile \
@@ -250,10 +266,13 @@ if [ -x /sbin/ethtool ]; then
     iflist=$(cat /proc/net/dev \
         | sed -rn 's/^\s*(\S+):.*$/\1/p')
     ifdir="$capdir/ethtool"
-    mkdir -p $ifdir/info $ifdir/features $ifdir/stats
+    mkdir -p $ifdir/info $ifdir/stats
     for ifname in $iflist ; do
-        ethtool -i $ifname > $ifdir/info/$ifname.txt 2>&1
-        ethtool -k $ifname > $ifdir/features/$ifname.txt 2>&1
+        ( echo "-- 'ethtool'"     ; ethtool    $ifname ; \
+          echo "-- 'ethtool -i'"  ; ethtool -i $ifname ; \
+          echo "-- 'ethtool -k'"  ; ethtool -k $ifname ; \
+          echo "-- 'ethtool -m'"  ; ethtool -m $ifname ; \
+        ) > $ifdir/info/$ifname.txt 2>&1
         ethtool -S $ifname > $ifdir/stats/$ifname.txt 2>&1
     done
 fi
