@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 
+#include <rte_version.h>
 #include <rte_common.h>
 #include <rte_mbuf.h>
 #include <rte_ring.h>
