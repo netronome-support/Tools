@@ -73,7 +73,12 @@ tx_queue_flush (tx_queue_set_t *qp, int prtidx, int count)
 {
     struct rte_ring *ring = qp->ring[prtidx];
     struct rte_mbuf **mbufs = tx_queue_port_mbuf(qp, prtidx);
-    int enqcnt = rte_ring_enqueue_burst(ring, (void *) mbufs, count);
+    int enqcnt
+    #if RTE_VERSION >= RTE_VERSION_NUM(17,2,0,0)
+        = rte_ring_enqueue_burst(ring, (void *) mbufs, count, NULL);
+    #else
+        = rte_ring_enqueue_burst(ring, (void *) mbufs, count);
+    #endif
     if (unlikely(enqcnt < count)) {
         dbgmsg(DEBUG, nopkt, "Ring FULL (Prt %u, Core %u, Disc %u)",
             prtidx, rte_lcore_id(), count - enqcnt);

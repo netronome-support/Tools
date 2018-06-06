@@ -137,7 +137,11 @@ flush_thread_ring_set (tx_ring_set_t *trs)
         int pktcnt, sndcnt;
         do {
             pktcnt = rte_ring_mc_dequeue_burst(ring, (void **) mbufs,
+            #if RTE_VERSION >= RTE_VERSION_NUM(17,2,0,0)
+                TX_BURST_SIZE, NULL);
+            #else
                 TX_BURST_SIZE);
+            #endif
             sndcnt = rte_eth_tx_burst(ri->prtidx, 0, mbufs, pktcnt);
             if (unlikely(sndcnt < pktcnt)) {
                 dbgmsg(DEBUG, nopkt,
