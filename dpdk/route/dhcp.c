@@ -204,6 +204,13 @@ rt_dhcp_process (rt_pkt_t pkt)
     rt_ipv4_addr_t l_ipaddr = ntohl(dhcp->your_ip_addr);
     switch (opts.msgtype) {
         case 2: /* DHCP OFFER */
+            if (opts.plen == 32) {
+                /* Not sure why I receive /32, but let's ignore them */
+                dbgmsg(INFO, pkt, "DHCP OFFER received (%s/%u)"
+                    " but ignored since it is /32",
+                    rt_ipaddr_nr_str(l_ipaddr), opts.plen);
+                goto Discard;
+            }
             dbgmsg(INFO, pkt, "DHCP OFFER received (%s/%u)",
                 rt_ipaddr_nr_str(l_ipaddr), opts.plen);
             info->offer_ipv4_addr = l_ipaddr;
