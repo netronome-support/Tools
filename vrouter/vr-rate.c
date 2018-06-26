@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <assert.h>
 
-#define F_LIST_LONG         (1 << 0)
+#define F_LIST_COUNT        (1 << 0)
 #define F_LIST_REF          (1 << 1)
 #define F_LIST_DROP         (1 << 2)
 #define F_LIST_ONCE         (1 << 3)
@@ -16,14 +16,14 @@
 #define F_LIST_NORM         (1 << 5)
 #define F_LIST_TOTAL        (1 << 6)
 #define F_LIST_PKTSIZE      (1 << 7)
+#define F_LIST_RATIO        (1 << 8)
 
 #define SAMPLE_COUNT  16
 
 typedef struct {
   uint64_t pkt;
   uint64_t oct;
-  uint64_t err;
-  uint64_t drop;
+  uint64_t drop; /* Same as 'errors' */
 } cntset_t;
 
 typedef struct {
@@ -110,7 +110,6 @@ cntset_aggregate (cntset_t *tp, const cntset_t *sp)
 {
   tp->pkt  += sp->pkt;
   tp->oct  += sp->oct;
-  tp->err  += sp->err;
   tp->drop += sp->drop;
 }
 
@@ -149,7 +148,9 @@ int vr_sample (ifdata_t *iflist, int smpidx)
             state = 1;
             char vifname[256], type[32], ifname[256]; 
             rc = sscanf(str, "%s %s %s", vifname, type, ifname);
-            assert(rc >= 3);
+            if ((rc < 3) || (strcmp(type, "OS:") != 0)) {
+                strcpy(ifname, vifname);
+            }
             ifdp = ifdata_find(iflist, ifname);
             added = 0;
             if (ifdp == NULL) {
@@ -181,7 +182,7 @@ int vr_sample (ifdata_t *iflist, int smpidx)
             char tmp[256];
             rc = sscanf(str, "%s packets:%" SCNu64
                 " bytes:%" SCNu64 " errors:%" SCNu64,
-                tmp, &csp->pkt, &csp->oct, &csp->err);
+                tmp, &csp->pkt, &csp->oct, &csp->drop);
             continue;
         }
         if (strlen(str) == 0) {
@@ -218,16 +219,26 @@ static inline int printField (int mode, int flags, char *str,
             strcpy(buf, "-");
         n += sprintf(&str[n], "%8s", buf);
     }
-    if (flags & F_LIST_LONG) {
-        n += sprintf(&str[n], "  %12llu",
-          (long long unsigned int) cp1->pkt - ((flags & F_LIST_REF)
-            ? ref.pkt : 0));
+    if (flags & F_LIST_COUNT) {
+        uint64_t cnt = cp1->pkt - ((flags & F_LIST_REF) ? ref.pkt : 0);
+        n += sprintf(&str[n], "  %12llu", cnt);
     }
     if (flags & F_LIST_DROP) {
-        n += sprintf(&str[n], "  %12llu",
-          cp1->drop - ((flags & F_LIST_REF) ? ref.drop : 0));
+        uint64_t cnt = cp1->drop - ((flags & F_LIST_REF) ? ref.drop : 0);
+        n += sprintf(&str[n], "  %12llu", cnt);
     }
     return n;
+}
+
+static inline int printRatio (const sample_t *sp0, const sample_t *sp1, char *str)
+{
+    uint64_t r_diff_pkt_cnt = sp1->r.pkt - sp0->r.pkt;
+    uint64_t t_diff_pkt_cnt = sp1->t.pkt - sp0->t.pkt;
+    if ((r_diff_pkt_cnt == 0) || (t_diff_pkt_cnt == 0))
+        return sprintf(str, "        ");
+    double ratio = (double) t_diff_pkt_cnt / (double) r_diff_pkt_cnt;
+   // return sprintf(str, "%12llu %12llu ", r_diff_pkt_cnt, t_diff_pkt_cnt);
+    return sprintf(str, "  %6.2f", ratio * 100.0);
 }
 
 void printDiff (char *str,
@@ -245,6 +256,9 @@ void printDiff (char *str,
     n += sprintf(&str[n], "    ");
     n += printField(0, flags, &str[n],
         &sp0->t, &sp1->t, f, ifp->ref.t);
+    if (flags & F_LIST_RATIO) {
+        n += printRatio(sp0, sp1, &str[n]);
+    }
 }
 
 static ifdata_t *ifdata_alloc (int type, const char *ifname)
@@ -268,7 +282,7 @@ int main (int argc, char *argv[]) {
     char str[512];
     int flags = 0;
     int ifcnt = 0;
-    int i, x = 1, y = 0;
+    int argidx, x = 1, y = 0;
     int nl = 13;
     int ifidx;
     int ival = 500000;
@@ -285,39 +299,46 @@ int main (int argc, char *argv[]) {
     // Default Total Entry
     ifdata[ifcnt++] = ifdata_alloc(TOTAL_RESET, NULL);
 
-    for (i=1 ; i < argc ; i++) {
-        char *a = argv[i];
-        if ((strcmp(a, "-h") == 0) || (strcmp(a, "--help") == 0))
+    for (argidx = 1 ; argidx < argc ; argidx++) {
+        char *arg = argv[argidx];
+        int argleft = argc - argidx - 1;
+        if ((strcmp(arg, "-h") == 0) || (strcmp(arg, "--help") == 0))
             goto Usage;
-        if ((strcmp(a, "-i") == 0) || (strcmp(a, "--interval") == 0))
-            ival = (int) (1e6 * atof(argv[++i]));
-        else if (strcmp(a, "--hist") == 0)
-            hist = (int) (1e6 * atof(argv[++i]));
-        else if (strcmp(a, "--long") == 0)
-            flags |= F_LIST_LONG;
-        else if (strcmp(a, "--list-drop") == 0)
+        if ((strcmp(arg, "-i") == 0) || (strcmp(arg, "--interval") == 0)) {
+            if (argleft < 1) goto Usage;
+            ival = (int) (1e6 * atof(argv[++argidx]));
+        } else if (strcmp(arg, "--hist") == 0) {
+            if (argleft < 1) goto Usage;
+            hist = (int) (1e6 * atof(argv[++argidx]));
+        } else if (strcmp(arg, "--long") == 0)
+            flags |= F_LIST_COUNT;
+        else if (strcmp(arg, "--count") == 0)
+            flags |= F_LIST_COUNT;
+        else if (strcmp(arg, "--list-drop") == 0)
             flags |= F_LIST_DROP;
-        else if (strcmp(a, "--reset") == 0)
+        else if (strcmp(arg, "--reset") == 0)
             flags |= F_LIST_REF;
-        else if (strcmp(a, "--total-start") == 0)
+        else if (strcmp(arg, "--total-start") == 0)
             ifdata[ifcnt++] = ifdata_alloc(TOTAL_RESET, NULL);
-        else if (strcmp(a, "--space") == 0)
+        else if (strcmp(arg, "--space") == 0)
             ifdata[ifcnt++] = ifdata_alloc(SPACE, NULL);
-        else if (strcmp(a, "--total") == 0)
+        else if (strcmp(arg, "--total") == 0)
             ifdata[ifcnt++] = ifdata_alloc(TOTAL, NULL);
-        else if (strcmp(a, "--once") == 0)
+        else if (strcmp(arg, "--once") == 0)
             flags |= F_LIST_ONCE;
-        else if (strcmp(a, "--no-header") == 0)
+        else if (strcmp(arg, "--no-header") == 0)
             flags |= F_LIST_NOHEADER;
-        else if (strcmp(a, "--norm") == 0)
+        else if (strcmp(arg, "--norm") == 0)
             flags |= F_LIST_NORM;
-        else if (strcmp(a, "--pktsize") == 0)
+        else if (strcmp(arg, "--pktsize") == 0)
             flags |= F_LIST_PKTSIZE;
-        else if (!strcmp(a, "-n"))
+        else if (strcmp(arg, "--ratio") == 0)
+            flags |= F_LIST_RATIO;
+        else if (strcmp(arg, "-n") == 0)
             nl = 10;
         else {
-            ifdata_t *p = ifdata_alloc(IFACE, strdup(a));
-            ifdata[ifcnt++] = p;
+            fprintf(stderr, "ERROR: unknown argument '%s'\n", arg);
+            goto Usage;
         }
     }
     if (ifcnt == 0) {
@@ -325,12 +346,13 @@ int main (int argc, char *argv[]) {
         printf("%s [options]\n", argv[0]);
         printf(
           "  --once         - Run once and exit\n"
-          "  --long         - Long listing (incl. pkt counters)\n"
+          "  --count        - Show packet counters\n"
           "  --list-drop    - List drop counters\n"
           "  --interval     - Measurement interval\n"
           "  --no-header    - Skip printing the header\n"
           "  --reset        - Adjust counters to start at zero\n"
           "  --pktsize      - Show Average Packet Size (APS)\n"
+          "  --ratio        - Show ratio between receive and transmit\n"
           "  --norm         - Show column (GE) with normalized bit-rate\n"
           "                   (frame size incl. Ethernet inter-frame gap\n"
           );
@@ -338,6 +360,11 @@ int main (int argc, char *argv[]) {
     }
 
     vr_sample(&ifhead, 0);
+
+    ifdata_t *p;
+    for (p = ifhead.next ; p != &ifhead ; p = p->next) {
+        p->ref = p->smpl[0];
+    }
 
     for (;;) {
         usleep(ival);
@@ -362,7 +389,7 @@ int main (int argc, char *argv[]) {
             strcat(head, "     APS");
             w += 8;
         }
-        if (flags & F_LIST_LONG) {
+        if (flags & F_LIST_COUNT) {
             strcat(head, "           cnt");
             w += 14;
         }
@@ -377,8 +404,12 @@ int main (int argc, char *argv[]) {
             n += sprintf(&buf[n], "\n\n\n\n");
             n += sprintf(&buf[n], "%-*s  %-*s    %s\n",
                 16, "Interface", w, "Receive", "Transmit");
-            n += sprintf(&buf[n], "%-*s  %-*s    %s\n",
+            n += sprintf(&buf[n], "%-*s  %-*s    %s",
                 16, "", w, head, head);
+            if (flags & F_LIST_RATIO) {
+                n += sprintf(&buf[n], "   ratio");
+            }
+            n += sprintf(&buf[n], "\n");
         }
 
         ifdata_t *p;
