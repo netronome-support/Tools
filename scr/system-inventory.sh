@@ -8,6 +8,10 @@ capdir="$tmpdir/$capname"
 mkdir -p $capdir
 
 ########################################################
+if [ "$(whoami)" != "root" ]; then
+    echo "WARNING: for best result, please run this as 'root'"
+fi
+########################################################
 # Copy system files
 
 list=()
@@ -24,6 +28,8 @@ list+=( "/etc/grub" )
 list+=( "/etc/irqbalance" )
 list+=( "/etc/libvirt-bin" )
 list+=( "/etc/rc.local" )
+list+=( "/etc/modules" )
+list+=( "/etc/modprobe.d" )
 
 list+=( "/boot/grub/grub.cfg" )
 list+=( "/boot/grub2/grub.cfg" )
@@ -82,7 +88,11 @@ for fname in "${list[@]}" ; do
             echo "Missing $path" >> $capdir/missing-files.txt
         fi
     elif [ -e "$fname" ]; then
-        $copy "$fname"
+        if [ -r "$fname" ]; then
+            $copy "$fname"
+        else
+            echo "Access denied: $fname" >> $capdir/missing-files.txt
+        fi
     else
         echo "Missing $fname" >> $capdir/missing-files.txt
     fi
@@ -94,9 +104,9 @@ function run () {
     local args="$2"
     local fname="$3"
     if [ -x $cmd ]; then
-        tool="$cmd"
+        local tool="$cmd"
     else
-        tool=$(which $cmd 2> /dev/null)
+        local tool=$(which $cmd 2> /dev/null)
         if [ ! -x "$tool" ]; then
             echo "Missing $cmd" >> $capdir/missing-tools.txt
             return
@@ -104,9 +114,13 @@ function run () {
     fi
     ( date +'%Y-%m-%d %H%M%S.%N' ; \
       echo "  $tool $args" ; \
-    ) >> $capdir/cmd.log  
+    ) >> $capdir/cmd.log
+    local dirname=$(dirname "$fname")
+    if [ "$dirname" != "" ] && [ "$dirname" != "." ]; then
+        mkdir -p $capdir/$dirname || exit -1
+    fi
     $tool $args > $capdir/$fname 2>&1
-    rc=$?
+    local rc=$?
     if [ $rc -ne 0 ]; then
         echo "  ERROR Code: $rc" \
             >> $capdir/cmd.log
@@ -115,6 +129,7 @@ function run () {
 
 ########################################################
 
+run "whoami" ""                 "whoami.txt"
 run "uname" "-r"                "kernel-version.txt"
 run "uname" "-a"                "uname-all.txt"
 run "lscpu" ""                  "lscpu.txt"
@@ -151,11 +166,11 @@ run "/opt/netronome/bin/nfp-programmables" "" "nfp-programmables.txt"
 run "/opt/netronome/bin/nfp-arm" "-D" "nfp-arm-D.txt"
 run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
 run "/opt/netronome/bin/nfp-res" "-L" "nfp-res-locks.txt"
+run "virtio-forwarder" "--version" "virtio-forwarder-version"
 
 # Run some commands twice to collect a 'diff':
 for sd in s0 s1 ; do
     # Note: timing is captured in the 'cmd-timing.txt' file
-    mkdir -p $capdir/$sd
     # Statistics Sample '0':
     run "ifconfig" "-a"             "$sd/ifconfig.txt"
     run "netstat" "-s"              "$sd/netstat-s.txt"
@@ -334,6 +349,17 @@ if [ "$OVS" != "" ]; then
     done
 fi
         
+########################################################
+# Contrail vRouter Dataplane commands
+run "vrouter" "--info" "vrouter/vrouter-info.txt"
+run "contrail-status" "" "vrouter/contrail-status.txt"
+run "vif" "--list" "vrouter/vif-list.txt"
+run "dropstats" "" "vrouter/dropstats.txt"
+run "vrfstats" "--dump" "vrouter/vrfstats-dump.txt"
+run "flow" "-l" "vrouter/flow-l.txt"
+run "/opt/netronome/libexec/nfp-vr-syscntrs.sh" "" \
+    "vrouter/nfp-vr-syscntrs.txt"
+
 ########################################################
 # Copy capture script
 
