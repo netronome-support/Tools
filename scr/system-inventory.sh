@@ -57,6 +57,7 @@ list+=( "/var/log/upstart/kmod.log" )
 list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 
 list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
+list+=( "/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages" )
 
 # Save the script into the capture
 list+=( "$0" )
@@ -135,6 +136,7 @@ run "uname" "-a"                "uname-all.txt"
 run "lscpu" ""                  "lscpu.txt"
 run "lspci" ""                  "lspci.txt"
 run "lspci" "-vvv"              "lspci-vvv.txt"
+run "lspci" "-x"                "lspci-x.txt"
 run "dmesg" ""                  "dmesg.txt"
 run "yum" "list"                "yum-list.txt"
 run "dpkg" "--get-selections"   "dpkg-get-selections.txt"
@@ -166,7 +168,8 @@ run "/opt/netronome/bin/nfp-programmables" "" "nfp-programmables.txt"
 run "/opt/netronome/bin/nfp-arm" "-D" "nfp-arm-D.txt"
 run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
 run "/opt/netronome/bin/nfp-res" "-L" "nfp-res-locks.txt"
-run "virtio-forwarder" "--version" "virtio-forwarder-version"
+
+run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
 
 # Run some commands twice to collect a 'diff':
 for sd in s0 s1 ; do
@@ -214,7 +217,7 @@ if [ "$virsh" != "" ]; then
         mkdir -p $vmdir
         virsh dumpxml $vmname > $vmdir/config.xml
         virsh dominfo $vmname > $vmdir/dominfo.txt
-        virsh vcpuinfo $vmname > $vmdir/vcpuinfo.txt
+        virsh vcpuinfo $vmname > $vmdir/vcpuinfo.txt 2>&1
     done
     for netname in $(virsh net-list --name) ; do
         netdir="$capdir/virsh/net/$netname"
@@ -241,7 +244,7 @@ for logfile in $loglist ; do
             | tail -1000 \
             > $capdir/log/$logfile-tail.txt
         cat /var/log/$logfile \
-            | grep -E '(nfp|kvm|virtiorelayd)' \
+            | grep -E '(nfp|kvm|virtiorelayd|virtio-forward|vio4wd)' \
             | tail -1000 \
             > $capdir/log/$logfile-filtered-tail.txt
     fi
@@ -277,9 +280,10 @@ for modname in $modlist ; do
 done
 
 ########################################################
+iflist=$(cat /proc/net/dev \
+    | sed -rn 's/^\s*(\S+):.*$/\1/p')
+########################################################
 if [ -x /sbin/ethtool ]; then
-    iflist=$(cat /proc/net/dev \
-        | sed -rn 's/^\s*(\S+):.*$/\1/p')
     ifdir="$capdir/ethtool"
     mkdir -p $ifdir/info $ifdir/stats
     for ifname in $iflist ; do
@@ -293,11 +297,26 @@ if [ -x /sbin/ethtool ]; then
 fi
 
 ########################################################
+# Capture OVS-TC flows
+
+if which tc > /dev/null 2>&1 ; then
+    mkdir -p $capdir/ovs-tc
+    for ifname in $iflist ; do
+        run "tc" "-s filter show dev $ifname parent ffff:" "ovs-tc/$ifname.flows"
+    done
+    # Don't keep empty files
+    find $capdir/ovs-tc -empty -delete
+fi
+
+########################################################
 OVS=""
 if which ovs-vsctl > /dev/null 2>&1 ; then
     mkdir -p $capdir/ovs
 
     run "ovs-vsctl" "--version" "ovs/vsctl-version.txt"
+
+    run "ovs-vsctl" "get Open_vSwitch . other_config" \
+        "ovs/vsctl-other-config.txt"
 
     if ovs-vsctl show > /dev/null 2>&1 ; then
         OVS="INSTALLED"
