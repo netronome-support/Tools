@@ -210,8 +210,7 @@ for pid in $(pgrep virtiorelayd) ; do
 done
 
 ########################################################
-virsh="$(which virsh)"
-if [ "$virsh" != "" ]; then
+if which virsh > /dev/null 2>&1; then
     for vmname in $(virsh list --all --name) ; do
         vmdir="$capdir/virsh/vms/$vmname"
         mkdir -p $vmdir
@@ -283,9 +282,9 @@ done
 iflist=$(cat /proc/net/dev \
     | sed -rn 's/^\s*(\S+):.*$/\1/p')
 ########################################################
-if [ -x /sbin/ethtool ]; then
+if which ethtool > /dev/null 2>&1; then
     ifdir="$capdir/ethtool"
-    mkdir -p $ifdir/info $ifdir/stats
+    mkdir -p $ifdir/info $ifdir/stats $ifdir/dump
     for ifname in $iflist ; do
         ( echo "-- 'ethtool'"     ; ethtool    $ifname ; \
           echo "-- 'ethtool -i'"  ; ethtool -i $ifname ; \
@@ -293,6 +292,7 @@ if [ -x /sbin/ethtool ]; then
           echo "-- 'ethtool -m'"  ; ethtool -m $ifname ; \
         ) > $ifdir/info/$ifname.txt 2>&1
         ethtool -S $ifname > $ifdir/stats/$ifname.txt 2>&1
+        ethtool -w $ifname data $ifdir/dump/$ifname.txt 2> /dev/null
     done
 fi
 
