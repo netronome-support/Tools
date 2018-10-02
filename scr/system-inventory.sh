@@ -113,14 +113,20 @@ function run () {
             return
         fi
     fi
-    ( date +'%Y-%m-%d %H%M%S.%N' ; \
-      echo "  $tool $args" ; \
-    ) >> $capdir/cmd.log
-    local dirname=$(dirname "$fname")
-    if [ "$dirname" != "" ] && [ "$dirname" != "." ]; then
-        mkdir -p $capdir/$dirname || exit -1
+    printf "\n-- %s  -  %s\n# %s %s > %s\n" \
+        "$(date +'%Y-%m-%d %H%M%S.%N')" "$cmd" \
+        "$tool" "$args" "$fname" \
+        >> $capdir/cmd.log
+    if [ "$fname" == "" ]; then
+        local capfile="/dev/null"
+    else
+        local dirname=$(dirname "$fname")
+        if [ "$dirname" != "" ] && [ "$dirname" != "." ]; then
+            mkdir -p $capdir/$dirname || exit -1
+        fi
+        local capfile="$capdir/$fname"
     fi
-    $tool $args > $capdir/$fname 2>&1
+    $tool $args > $capfile 2>> $capdir/cmd.log
     local rc=$?
     if [ $rc -ne 0 ]; then
         echo "  ERROR Code: $rc" \
@@ -284,15 +290,23 @@ iflist=$(cat /proc/net/dev \
 ########################################################
 if which ethtool > /dev/null 2>&1; then
     ifdir="$capdir/ethtool"
+    flaglist=()
+    flaglist+=( "" ) # Current Settings
+    flaglist+=( "--driver" ) # Get Driver Information (-i)
+    flaglist+=( "--show-features" ) # Show netdev feature list (-k)
+    flaglist+=( "--module-info" ) # Show Module Information (-m)
     mkdir -p $ifdir/info $ifdir/stats $ifdir/dump
     for ifname in $iflist ; do
-        ( echo "-- 'ethtool'"     ; ethtool    $ifname ; \
-          echo "-- 'ethtool -i'"  ; ethtool -i $ifname ; \
-          echo "-- 'ethtool -k'"  ; ethtool -k $ifname ; \
-          echo "-- 'ethtool -m'"  ; ethtool -m $ifname ; \
-        ) > $ifdir/info/$ifname.txt 2>&1
-        ethtool -S $ifname > $ifdir/stats/$ifname.txt 2>&1
-        ethtool -w $ifname data $ifdir/dump/$ifname.txt 2> /dev/null
+        for flag in ${flaglist[@]} ; do
+            {   printf "\n-- 'ethtool $flag'\n"
+                ethtool ${flag} $ifname
+            } >> $ifdir/info/$ifname.txt 2>&1
+        done
+        run "ethtool" "-S $ifname" "$ifdir/stats/$ifname.txt"
+        # Set Debug-Level to '2'
+        run "ethtool" "--set-dump $ifname 2" ""
+        # Collect Debut Information
+        ethtool --get-dump $ifname data $ifdir/dump/$ifname.dump 2> /dev/null
     done
 fi
 
