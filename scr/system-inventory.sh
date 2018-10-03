@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################
+# Optional Items:
+# SYS_INV_CAPTURE_ETHTOOL_DUMPS=yes
+########################################################
 tmpdir=$(mktemp --directory)
 capname="capture-$(date +'%Y-%m-%d-%H%M')"
 capdir="$tmpdir/$capname"
@@ -59,7 +62,7 @@ list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
 list+=( "/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages" )
 
-# Save the script into the capture
+# Save the script itself into the capture
 list+=( "$0" )
 
 ########################################################
@@ -143,16 +146,16 @@ run "lscpu" ""                  "lscpu.txt"
 run "lspci" ""                  "lspci.txt"
 run "lspci" "-vvv"              "lspci-vvv.txt"
 run "lspci" "-x"                "lspci-x.txt"
-run "dmesg" ""                  "dmesg.txt"
+run "dmesg" ""                  "log/dmesg.txt"
 run "yum" "list"                "yum-list.txt"
 run "dpkg" "--get-selections"   "dpkg-get-selections.txt"
 run "dpkg" "-l"                 "dpkg-l.txt"
-run "ip" "link list"            "ip-link-list.txt"
-run "ip" "addr list"            "ip-addr-list.txt"
-run "ip" "route list"           "ip-route-list.txt"
-run "ip" "neigh list"           "ip-neigh-list.txt"
-run "arp" "-n"                  "arp-n.txt"
-run "route" "-n"                "route-n.txt"
+run "ip" "link list"            "ip/ip-link-list.txt"
+run "ip" "addr list"            "ip/ip-addr-list.txt"
+run "ip" "route list"           "ip/ip-route-list.txt"
+run "ip" "neigh list"           "ip/ip-neigh-list.txt"
+run "arp" "-n"                  "ip/arp-n.txt"
+run "route" "-n"                "ip/route-n.txt"
 run "lsmod" ""                  "lsmod.txt"
 run "ps" "aux"                  "ps-aux.txt"
 run "dmidecode" ""              "dmidecode.txt"
@@ -166,14 +169,14 @@ run "qemu-system-x86_64" "--version" "qemu-system-version.txt"
 
 run "getenforce" "" "selinux-getenforce.txt"
 
-run "/opt/netronome/bin/ovs-ctl" "version" "ovs-version.txt"
-run "/opt/netronome/bin/ovs-ctl" "status" "ovs-status.txt"
-run "/opt/netronome/bin/nfp-hwinfo" "" "nfp-hwinfo.txt"
-run "/opt/netronome/bin/nfp-media" "" "nfp-media.txt"
-run "/opt/netronome/bin/nfp-programmables" "" "nfp-programmables.txt"
-run "/opt/netronome/bin/nfp-arm" "-D" "nfp-arm-D.txt"
-run "/opt/netronome/bin/nfp-phymod" "" "nfp-phymod.txt"
-run "/opt/netronome/bin/nfp-res" "-L" "nfp-res-locks.txt"
+run "/opt/netronome/bin/ovs-ctl" "version" "ovs/ovs-version.txt"
+run "/opt/netronome/bin/ovs-ctl" "status" "ovs/ovs-status.txt"
+run "/opt/netronome/bin/nfp-hwinfo" "" "nfp/hwinfo.txt"
+run "/opt/netronome/bin/nfp-media" "" "nfp/media.txt"
+run "/opt/netronome/bin/nfp-programmables" "" "nfp/programmables.txt"
+run "/opt/netronome/bin/nfp-arm" "-D" "nfp/arm-D.txt"
+run "/opt/netronome/bin/nfp-phymod" "" "nfp/phymod.txt"
+run "/opt/netronome/bin/nfp-res" "-L" "nfp/locks.txt"
 
 run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
 
@@ -302,11 +305,18 @@ if which ethtool > /dev/null 2>&1; then
                 ethtool ${flag} $ifname
             } >> $ifdir/info/$ifname.txt 2>&1
         done
-        run "ethtool" "-S $ifname" "$ifdir/stats/$ifname.txt"
-        # Set Debug-Level to '2'
-        run "ethtool" "--set-dump $ifname 2" ""
-        # Collect Debut Information
-        ethtool --get-dump $ifname data $ifdir/dump/$ifname.dump 2> /dev/null
+        run "ethtool" "-S $ifname" "ethtool/stats/$ifname.txt"
+        if [ "$SYS_INV_CAPTURE_ETHTOOL_DUMPS" != "" ]; then
+            dmpdir="$ifdir/dump"
+            mkdir -p $dmpdir
+            for level in 1 2 ; do
+                # Set Debug-Level to '2'
+                run "ethtool" "--set-dump $ifname $level" ""
+                # Collect Debug Information
+                fname="$dmpdir/$ifname-l$level.data"
+                run "ethtool" "--get-dump $ifname data $fname" ""
+            done
+        fi
     done
 fi
 
