@@ -14,6 +14,9 @@ mkdir -p $capdir
 if [ "$(whoami)" != "root" ]; then
     echo "WARNING: for best result, please run this as 'root'"
 fi
+if ! which ethtool > /dev/null 2>&1; then
+    SYS_INV_CAPTURE_ETHTOOL_DUMPS=
+fi
 ########################################################
 # Copy system files
 
@@ -38,6 +41,8 @@ list+=( "/boot/grub/grub.cfg" )
 list+=( "/boot/grub2/grub.cfg" )
 list+=( "/boot/grub/grubenv" )
 list+=( "/boot/grub2/grubenv" )
+
+list+=( $(find /boot -name "config*$(uname -r)*") )
 
 list+=( "/etc/default/irqbalance" )
 
@@ -66,11 +71,18 @@ list+=( "/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages" )
 list+=( "$0" )
 
 ########################################################
-if [ -d /sys/bus/pci/drivers/nfp ]; then
-    nfplist=$(find /sys/bus/pci/drivers/nfp -type l -name '*:*:*.*')
+# Determine NFP-related parameters
+nfp_access_iface_list=()
+nfp_drv_dir="/sys/bus/pci/drivers/nfp"
+if [ -d $nfp_drv_dir ]; then
+    nfplist=$(find $nfp_drv_dir -type l -name '*:*:*.*')
     for nfpdir in $nfplist ; do
         list+=( "$nfpdir/numa_node" )
         list+=( "$nfpdir/irq" )
+        nfp_if_dir=$(find $nfpdir/net -maxdepth 1 -mindepth 1 -type d | head -1)
+        if [ -d $nfp_if_dir ]; then
+            nfp_access_iface_list+=( $(basename $nfp_if_dir) )
+        fi
     done
 fi
 
@@ -139,6 +151,38 @@ function run () {
 
 ########################################################
 
+function sample () {
+    local name="$1"
+
+    # Note: timing is captured in the 'cmd.log' file
+
+    run "ifconfig" "-a"             "$name/ifconfig.txt"
+    run "netstat" "-s"              "$name/netstat-s.txt"
+    run "nfp" "-m mac show port info 0 0" "$name/nfp-mac-0-0.txt"
+    run "nfp" "-m mac show port info 0 4" "$name/nfp-mac-0-4.txt"
+    run "ovs-ctl" "status troubleshoot -C" \
+        "$name/ovs-ctl-status-troubleshoot.txt"
+    if [ "$(pgrep virtiorelayd)" != "" ]; then
+        run "/opt/netronome/bin/virtio_relay_stats" "" \
+            "$name/nfp-virtio-stats.txt"
+    fi
+    if [ "$SYS_INV_CAPTURE_ETHTOOL_DUMPS" != "" ]; then
+        # Collect Debug Information
+        for ifname in ${nfp_access_iface_list[@]} ; do
+            # Set Debug-Level to '1'
+            run "ethtool" "--set-dump $ifname 1" ""
+            fname="$capdir/$name/ethtool-dump-$ifname-l1.data"
+            run "ethtool" "--get-dump $ifname data $fname" ""
+        done
+    fi
+}
+
+########################################################
+
+sample "s1"
+
+########################################################
+
 run "whoami" ""                 "whoami.txt"
 run "uname" "-r"                "kernel-version.txt"
 run "uname" "-a"                "uname-all.txt"
@@ -179,23 +223,6 @@ run "/opt/netronome/bin/nfp-phymod" "" "nfp/phymod.txt"
 run "/opt/netronome/bin/nfp-res" "-L" "nfp/locks.txt"
 
 run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
-
-# Run some commands twice to collect a 'diff':
-for sd in s0 s1 ; do
-    # Note: timing is captured in the 'cmd-timing.txt' file
-    # Statistics Sample '0':
-    run "ifconfig" "-a"             "$sd/ifconfig.txt"
-    run "netstat" "-s"              "$sd/netstat-s.txt"
-    run "nfp" "-m mac show port info 0 0" "$sd/nfp-mac-0-0.txt"
-    run "nfp" "-m mac show port info 0 4" "$sd/nfp-mac-0-4.txt"
-    run "ovs-ctl" "status troubleshoot -C" \
-        "$sd/ovs-ctl-status-troubleshoot.txt"
-    if [ "$(pgrep virtiorelayd)" != "" ]; then
-        run "/opt/netronome/bin/virtio_relay_stats" "" \
-            "$sd/nfp-virtio-stats.txt"
-    fi
-    test "$sd" == "s0" && sleep 1
-done
 
 ########################################################
 
@@ -298,7 +325,7 @@ if which ethtool > /dev/null 2>&1; then
     flaglist+=( "--driver" ) # Get Driver Information (-i)
     flaglist+=( "--show-features" ) # Show netdev feature list (-k)
     flaglist+=( "--module-info" ) # Show Module Information (-m)
-    mkdir -p $ifdir/info $ifdir/stats $ifdir/dump
+    mkdir -p $ifdir/info $ifdir/stats
     for ifname in $iflist ; do
         for flag in ${flaglist[@]} ; do
             {   printf "\n-- 'ethtool $flag'\n"
@@ -309,13 +336,11 @@ if which ethtool > /dev/null 2>&1; then
         if [ "$SYS_INV_CAPTURE_ETHTOOL_DUMPS" != "" ]; then
             dmpdir="$ifdir/dump"
             mkdir -p $dmpdir
-            for level in 1 2 ; do
-                # Set Debug-Level to '2'
-                run "ethtool" "--set-dump $ifname $level" ""
-                # Collect Debug Information
-                fname="$dmpdir/$ifname-l$level.data"
-                run "ethtool" "--get-dump $ifname data $fname" ""
-            done
+            # Set Debug-Level to '2'
+            run "ethtool" "--set-dump $ifname 2" ""
+            # Collect Debug Information
+            fname="$dmpdir/$ifname-l2.data"
+            run "ethtool" "--get-dump $ifname data $fname" ""
         fi
     done
 fi
@@ -402,6 +427,10 @@ run "vrfstats" "--dump" "vrouter/vrfstats-dump.txt"
 run "flow" "-l" "vrouter/flow-l.txt"
 run "/opt/netronome/libexec/nfp-vr-syscntrs.sh" "" \
     "vrouter/nfp-vr-syscntrs.txt"
+
+########################################################
+
+sample "s2"
 
 ########################################################
 # Copy capture script
