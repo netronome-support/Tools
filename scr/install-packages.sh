@@ -11,13 +11,13 @@ Works with both Debian and RedHat based Linux distributions
 
 Each argument corresponds to a package. Formats:
 
-  <package information>
-    - Always install this package
+  <package name>
+    - Always install this package.
 
-  <package and tool name>@<package information>
-    - Check if the dependency exists, if not then install the package
-      A dependency can either be an executible or a file
-      A file must begin with the character '/'
+  <dependency>@<package information>
+    - Check if the dependency exists, if not then install the package.
+      A dependency can either be a command (in $PATH) or a file.
+      A file dependency must begin with the character '/'.
       Example: virsh:libvirt-bin
 
   <package and tool name>@
@@ -33,7 +33,7 @@ Package Information:
         <package name> 
 
     The first entry will be used if the OS name matches. Typical
-    OS names: ubuntu, debian, centos, redhat, fedora
+    OS names: ubuntu, debian, centos, rhel, fedora
 
     An entry of the second format will be used if no other entry
     matches.
@@ -44,12 +44,17 @@ EOT
 }
 
 ########################################################################
-
+# Default Debian Package Cache to Max Age of 10 hours
+: "${PKG_UPDATE_MAX_AGE:=600}"
+########################################################################
 if which apt-get > /dev/null 2>&1 ; then
-    insttool="apt-get"
+    OS_PKG_ARCH="deb"
+    OS_PKG_TOOL=""
+    OS_PKG_TOOL="apt-get"
     OS_ID_LIKE="debian ubuntu"
 elif which yum > /dev/null 2>&1 ; then
-    insttool="yum"
+    OS_PKG_ARCH="rpm"
+    OS_PKG_TOOL="yum"
     OS_ID_LIKE="redhat fedora centos"
 else
     echo "ERROR: unable to determine package installation tool"
@@ -63,12 +68,17 @@ if [ -f /etc/os-release ]; then
     OS_ID_LIKE="$(cat /etc/os-release \
         | sed -rn 's/^ID_LIKE=//p' \
         | tr -d '"')"
+    if [ "$OS_ID_LIKE" == "" ]; then
+        case "$OS_ID" in
+            "fedora") OS_ID_LIKE="redhat centos" ;;
+        esac
+    fi
 fi
 
 ########################################################################
 
 function repository_update () {
-    case "$insttool" in
+    case "$OS_PKG_TOOL" in
       "yum")
         udtagfile="/var/lib/.yum-update-tag-file.txt"
         if [ ! -f "$udtagfile" ]; then
@@ -138,7 +148,7 @@ function cond_add_tool () {
     local pkgname="$2"
     if [ "${toolinfo:0:1}" == "/" ]; then
         # If first character is a '/', then cheack for a file
-        if [ ! -f "$toolinfo" ]; then
+        if [ ! -e "$toolinfo" ]; then
             pkglist+=( "$pkgname" )
         fi
     else
@@ -183,6 +193,10 @@ for arg in $@ ; do
             usage
             exit 0
             ;;
+        "--dump-pkg-environment")
+            echo "OS_PKG_ARCH=$OS_PKG_ARCH"
+            echo "OS_PKG_TOOL=$OS_PKG_TOOL"
+            ;;
         "--update"|"--cache-update")
             opt_update="yes"
             ;;
@@ -226,10 +240,10 @@ fi
 ########################################################################
 
 if [ "$PKG_LOG_FILE" != "" ]; then
-    exec $insttool install -y ${pkglist[@]} \
+    exec $OS_PKG_TOOL install -y ${pkglist[@]} \
         > $PKG_LOG_FILE 2>&1
 else
-    exec $insttool install -y ${pkglist[@]}
+    exec $OS_PKG_TOOL install -y ${pkglist[@]}
 fi
 
 ########################################################################
