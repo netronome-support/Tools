@@ -1,13 +1,37 @@
 #!/bin/bash
 
-if [ -f "$1" ]; then
-    pkgfile="$1"
-elif [ -d "$1" ]; then
-    pkgdir="$1"
-elif [ "$1" != "" ]; then
-    version="$1"
-else
-    echo "Usage: <DPDK package file>|<DPDK version>"
+for arg in "$@" ; do
+    if [ "$param" == "" ]; then
+        case "$arg" in
+            "--help"|"-h")
+                echo "Usage: <package file>|<version>"
+                exit 0
+                ;;
+            "--verbose"|"-v")   optVerbose="yes" ;;
+            "--reinstall")      REINSTALL="yes" ;;
+            "--version")        param="version" ;;
+        *)
+            if [ -f "$arg" ]; then
+                pkgfile="$arg"
+            elif [ -d "$arg" ]; then
+                pkgdir="$arg"
+            else
+                version="$arg"
+            fi
+            ;;
+        esac
+    else
+        case "$param" in
+            "version")          version="$arg" ;;
+        esac
+        param=""
+    fi
+done
+
+########################################
+
+if [ "${version}${pkgfile}${pkgdir}" == "" ]; then
+    echo "ERROR: please specify either version, package file, or package directory"
     exit -1
 fi
 
@@ -32,7 +56,7 @@ pkgname="dpdk"
 function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
-        echo "ERROR: $errmsg"
+        echo "ERROR($(basename $0)): $errmsg"
         exit -1
     fi
 }
@@ -48,18 +72,30 @@ prereqs+=( "tar@" )
 prereqs+=( "sed@" )
 prereqs+=( "gcc@" )
 prereqs+=( "make@" )
+prereqs+=( "python@" ) # needed by dpdk-devbind
 prereqs+=( "lspci@pciutils" ) # needed by dpdk-devbind
 # CentOS:
 prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel-$kvers" )
 #prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel" )
 
 case "$version" in
-    "17.11"|"17.11.2") prereqs+=( "libnuma-dev" ) ;;
+    "17.11"|"17.11.2")
+        prereqs+=( "/usr/include/numa.h@ubuntu:libnuma-dev,centos:numactl-devel" ) ;;
 esac
 
 if which install-packages.sh > /dev/null 2>&1 ; then
     install-packages.sh ${prereqs[@]}
         check_status "failed to install prerequisites"
+fi
+
+########################################
+
+if [ "$version" != "" ]; then
+    conffile="/etc/$pkgname-$version.conf"
+
+    if [ -f "$conffile" ] && [ "$REINSTALL" == "" ]; then
+        exit 0
+    fi
 fi
 
 ########################################
@@ -117,6 +153,14 @@ fi
 
 ########################################
 
+conffile="/etc/$pkgname-$version.conf"
+
+if [ -f "$conffile" ] && [ "$REINSTALL" == "" ]; then
+    exit 0
+fi
+
+########################################
+
 if [ "$pkgdir" == "" ]; then
     mkdir -p $DPDK_INSTALL_DIR
 
@@ -159,6 +203,13 @@ ss="${ss}s/^(CONFIG_RTE_LIBRTE_KNI).*$/\1=n/;"
 ss="${ss}s/^(CONFIG_RTE_LIBRTE_PMD_KNI).*$/\1=n/;"
 
 sed -r "$ss" -i $RTE_SDK/config/common_linuxapp
+
+########################################
+# Some bug fix
+
+sed -r "s/(link.link_speed) = ETH_SPEED_NUM_NONE/\1 = 100000/" \
+    -i $RTE_SDK/drivers/net/nfp/nfp_net.c \
+    || exit -1
 
 ########################################
 
@@ -248,8 +299,6 @@ fi
 
 ########################################
 ##  Save DPDK settings
-
-conffile="/etc/$pkgname-$version.conf"
 
 ( \
     echo "# Generated on $(date) by $0" ; \
