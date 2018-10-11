@@ -39,9 +39,7 @@ function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
         echo "ERROR($(basename $0)): $errmsg" >&2
-        if [ $2 != 0 ]; then
-            exit -1
-        fi
+        exit -1
     fi
 }
 
@@ -107,16 +105,13 @@ test $VERSION_ID -ge 28
 check_version 2 "#.#" "$(uname -r)" "4.18"
     update_kernel=$?
 
-check_version 2 "#.#" "$(uname -r)" "4.18"
-    check_status "The Linux Kernel must be at least 4.18" 0  
-
 if [ $update_kernel == 0 ]; then
     echo -e "${GREEN}OS Version and Kernel Version is sufficient${NC}"
 fi
 
 ############################################################
-
-while [ update_kernel == 1 ]; do
+while [ $update_kernel == 1 ]; do
+    echo -e "${RED}The Linux Kernel must be at least 4.18${NC}"
     read -p "Do you wish to update the Kernel? System will reboot after update. Please run this script again after reboot. (y/n)?" yn
     case $yn in
         [Yy]* )
@@ -168,6 +163,7 @@ if [ ! -d /lib/modules/$(uname -r)/build/usr/include ]; then
 fi
 ############################################################
 # Try to determine Firmware Version
+fw_version_required="bpf-2.0.6.121"
 fw_version=""
 nfp_drv_dir="/sys/bus/pci/drivers/nfp"
 if [ -d "$nfp_drv_dir" ]; then
@@ -189,12 +185,16 @@ fi
 ############################################################
 upgrade=NO
 check_version 4 "#.#.#.#" "$nfd_version" "0.0.3.5" || upgrade=YES
-check_version 4 "bpf-#.#.#.#" "$fw_version" "bpf-2.0.6.121" || upgrade=YES
+if [ ${fw_version:0:3} == ${fw_version_required:0:3} ]; then
+    check_version 4 "bpf-#.#.#.#" "$fw_version" "$fw_version_required" || upgrade=YES
+else
+    upgrade=YES
+fi
 if [ "$upgrade" == "NO" ] && [ "$fw_app_name" == "ebpf" ]; then
-    echo "DONE($fw_version already installed)"
+    echo -e "${GREEN}DONE($fw_version already installed)${NC}"
+    echo -e "${GREEN}eBPF Offload setup for Agilio SmartNIC is complete${NC}"
     exit 0
 fi
-
 ############################################################
 if [ "$pkgfile" == "" ]; then
     attchid="36012574800" ; r_pkgvers="2.0.6.121-1"
@@ -216,5 +216,5 @@ modprobe nfp
     check_status "modprobe of 'nfp' failed"
 
 ############################################################
-echo "SUCCESS($(basename $0))"
+echo "SUCCESS($(basename $0)) - eBPF Offload setup for Agilio SmartNIC is complete"
 exit 0
