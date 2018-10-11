@@ -1,5 +1,9 @@
 #!/bin/bash
 
+GREEN='\033[0;32m'
+NC='\033[0m'
+RED='\033[0;31m'
+
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
@@ -35,7 +39,9 @@ function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
         echo "ERROR($(basename $0)): $errmsg" >&2
-        exit -1
+        if [ $2 != 0 ]; then
+            exit -1
+        fi
     fi
 }
 
@@ -85,7 +91,7 @@ function download () {
     return 0
 }
 ############################################################
-echo " - Check Ubuntu OS Version and Kernel Version"
+echo " - Check OS Version and Kernel Version"
 
 test -f /etc/os-release
     check_status "missing file /etc/os-release"
@@ -93,13 +99,38 @@ test -f /etc/os-release
 . /etc/os-release
 
 test "$ID" == "fedora"
-    check_status "this installation script requires Fedora"
+    check_status "This installation script requires Fedora"
 
 test $VERSION_ID -ge 28
-    check_status "this installation script requires at least Fedora 28"
+    check_status "This installation script requires at least Fedora 28"
 
 check_version 2 "#.#" "$(uname -r)" "4.18"
-    check_status "The Linux Kernel must be at least 4.18"
+    update_kernel=$?
+
+check_version 2 "#.#" "$(uname -r)" "4.18"
+    check_status "The Linux Kernel must be at least 4.18" 0  
+
+if [ $update_kernel == 0 ]; then
+    echo -e "${GREEN}OS Version and Kernel Version is sufficient${NC}"
+fi
+
+############################################################
+
+while [ update_kernel == 1 ]; do
+    read -p "Do you wish to update the Kernel? System will reboot after update. Please run this script again after reboot. (y/n)?" yn
+    case $yn in
+        [Yy]* )
+        echo "Kernel will now be updated..."
+        curl -s https://repos.fedorapeople.org/repos/thl/kernel-vanilla.repo | sudo tee /etc/yum.repos.d/kernel-vanilla.repo
+        yum install kernel-devel -y
+        dnf --enablerepo=kernel-vanilla-stable update -y
+            check_status "failed to upgrade kernel"
+        reboot;
+        break;;
+        [Nn]* ) echo "Exiting setup"; exit;;
+        * ) echo "Please answer (y/n).";;
+    esac
+done  
 
 ############################################################
 
@@ -117,7 +148,7 @@ pkglist+=( "/usr/include/libmnl/libmnl.h@libmnl-devel" )
 pkglist+=( "/usr/include/ncurses.h@ncurses-devel" )
 pkglist+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
 
-install-packages.sh ${pkglist[@]} \
+./install-packages.sh ${pkglist[@]} \
     || exit -1
 
 ############################################################
