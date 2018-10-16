@@ -143,7 +143,8 @@ pkglist+=( "/usr/include/libmnl/libmnl.h@libmnl-devel" )
 pkglist+=( "/usr/include/ncurses.h@ncurses-devel" )
 pkglist+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
 
-./install-packages.sh ${pkglist[@]} \
+script_full_path=$(dirname "$0")
+$script_full_path'/install-packages.sh' ${pkglist[@]} \
     || exit -1
 
 ############################################################
