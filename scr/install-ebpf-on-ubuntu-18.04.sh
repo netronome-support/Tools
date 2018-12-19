@@ -3,6 +3,9 @@
 ############################################################
 dldir="/var/cache/download"
 ############################################################
+ns_atchmnt_url="https://help.netronome.com/helpdesk/attachments"
+deb_dl_dir="/var/cache/download/deb"
+############################################################
 function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
@@ -80,9 +83,6 @@ apt-get install -y ${pkglist[@]}
 
 ############################################################
 
-check_version 2 "#.#" "$(uname -r)" "4.18"
-upgrade_kernel="$?"
-
 kern_url="http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.18-rc8"
 kern_dl_dir="/var/cache/download/kernel"
 kvers0="4.18.0-041800rc8"
@@ -102,7 +102,9 @@ kfsdlist+=( "$kern_dl_dir" )
 kfsdlist+=( "/tmp" )
 
 kiflist=()
-if [ $upgrade_kernel -ne 0 ]; then
+
+check_version 2 "#.#" "$(uname -r)" "4.18"
+if [ $? -ne 0 ]; then
     echo " - Install Linux Kernel $kvers0"
     for kfn in ${kfnlist[@]} ; do
         kfm=""
@@ -139,6 +141,7 @@ fi
 ############################################################
 if [ ! -x /usr/bin/llvm-mc-6.0 ]; then
     echo " - Install LLVM"
+
 cat <<EOF > /etc/apt/sources.list.d/llvm.list
 # Added by $0 on $(date)
 deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-6.0 main
@@ -166,28 +169,38 @@ EOF
 fi
 
 ############################################################
-echo " - Install iproute2"
 
 git_repo_base_dir="/opt/git"
 git_url="https://git.kernel.org/pub/scm/network/iproute2"
 git_repo_name="iproute2-next"
 git_repo_dir="$git_repo_base_dir/$git_repo_name"
 
-if [ -d "$git_repo_dir/.git" ]; then
-    git -C $git_repo_dir pull
-        check_status "failed to update GIT repo $git_repo_dir"
+if ! which ip > /dev/null 2>&1 ; then
+    iproute2_version=""
 else
-    mkdir -p $git_repo_base_dir
-    git -C $git_repo_base_dir clone $git_url/$git_repo_name.git
-        check_status "failed to clone repo $git_url/$git_repo_name.git"
+    iproute2_version="$(ip -V | sed -r 's/^.*iproute2-//')"
 fi
-{   echo " - Build iproute2"
-    cd $git_repo_base_dir/$git_repo_name \
-        && ./configure \
-        && make \
-        && make install
-}
-    check_status "failed to build & install $git_repo_name"
+
+check_version 1 "ss#" "$iproute2_version" "180813"
+if [ $? -ne 0 ]; then
+    echo " - Install iproute2"
+
+    if [ -d "$git_repo_dir/.git" ]; then
+        git -C $git_repo_dir pull
+            check_status "failed to update GIT repo $git_repo_dir"
+    else
+        mkdir -p $git_repo_base_dir
+        git -C $git_repo_base_dir clone $git_url/$git_repo_name.git
+            check_status "failed to clone repo $git_url/$git_repo_name.git"
+    fi
+    {   echo " - Build iproute2"
+        cd $git_repo_base_dir/$git_repo_name \
+            && ./configure \
+            && make \
+            && make install
+    }
+        check_status "failed to build & install $git_repo_name"
+fi
 
 ############################################################
 ##  Strange fix which enables one to compile ebpf applications
@@ -206,9 +219,15 @@ if [ ! -d "$git_repo_base_dir/linux" ]; then
 fi
 
 ############################################################
-if [ "$(which bpftool)" == "" ] \
-    || check_version 3 "v#.#.#" "$(bpftool --version | cut -d ' ' -f 2)" "v4.17.0"
-then
+if ! which bpftool > /dev/null 2>&1 ; then
+    bpftool_version=""
+else
+    bpftool_version="$(bpftool --version | cut -d ' ' -f 2)"
+fi
+
+check_version 3 "v#.#.#" "$bpftool_version" "v4.17.0"
+if [ $? -ne 0 ]; then
+    echo " - Install bpftool ($bpftool_version)"
     bpfdir="$git_repo_base_dir/linux/tools/lib/bpf"
     test -d $bpfdir
         check_status "missing directory $bfpdir"
@@ -221,9 +240,6 @@ then
     ldconfig
         check_status "ldconfig returned with error"
 fi
-############################################################
-ns_atchmnt_url="https://help.netronome.com/helpdesk/attachments"
-deb_dl_dir="/var/cache/download/deb"
 ############################################################
 c_pkgvers=$(apt-cache show bpftool 2> /dev/null \
     | sed -rn 's/^Version:\s(\S+)$/\1/p')
@@ -249,6 +265,7 @@ attchid="36012574752" ; r_pkgvers="2.0.6.121-1"
 
 check_version 4 "#.#.#.#" "$c_pkgvers" "$r_pkgvers"
 if [ $? -ne 0 ]; then
+    echo " - Install Netronome eBPF Firmware"
     pkgfname="agilio-bpf-firmware-$r_pkgvers.deb"
     download $deb_dl_dir "$ns_atchmnt_url/$attchid" "$pkgfname"
 
