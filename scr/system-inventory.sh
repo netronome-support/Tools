@@ -166,6 +166,14 @@ function sample () {
         run "/opt/netronome/bin/virtio_relay_stats" "" \
             "$name/nfp-virtio-stats.txt"
     fi
+
+    # Contrail vRouter Statistics
+    run "vif" "--list" "vrouter/$name/vif-list.txt"
+    run "dropstats" "" "vrouter/$name/dropstats.txt"
+    run "vrfstats" "--dump" "vrouter/$name/vrfstats-dump.txt"
+    run "/opt/netronome/libexec/nfp-vr-syscntrs.sh" "" \
+        "vrouter/$name/nfp-vr-syscntrs.txt"
+
     if [ "$SYS_INV_CAPTURE_ETHTOOL_DUMPS" != "" ]; then
         # Collect Debug Information
         for ifname in ${nfp_access_iface_list[@]} ; do
@@ -419,14 +427,10 @@ fi
         
 ########################################################
 # Contrail vRouter Dataplane commands
+
 run "vrouter" "--info" "vrouter/vrouter-info.txt"
 run "contrail-status" "" "vrouter/contrail-status.txt"
-run "vif" "--list" "vrouter/vif-list.txt"
-run "dropstats" "" "vrouter/dropstats.txt"
-run "vrfstats" "--dump" "vrouter/vrfstats-dump.txt"
 run "flow" "-l" "vrouter/flow-l.txt"
-run "/opt/netronome/libexec/nfp-vr-syscntrs.sh" "" \
-    "vrouter/nfp-vr-syscntrs.txt"
 
 ########################################################
 
