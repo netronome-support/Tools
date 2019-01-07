@@ -1,5 +1,8 @@
 #!/bin/bash
 
+install=""
+list="NFP_PMD"
+# MLX4_PMD MLX5_PMD
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
@@ -8,8 +11,11 @@ for arg in "$@" ; do
                 exit 0
                 ;;
             "--verbose"|"-v")   optVerbose="yes" ;;
-            "--reinstall")      REINSTALL="yes" ;;
+            "--reinstall")      install="yes" ;;
+            "--force")          install="yes" ;;
             "--version")        param="version" ;;
+            "--list-set")       param="list-set" ;;
+            "--list-add")       param="list-add" ;;
         *)
             if [ -f "$arg" ]; then
                 pkgfile="$arg"
@@ -23,6 +29,8 @@ for arg in "$@" ; do
     else
         case "$param" in
             "version")          version="$arg" ;;
+            "list-set")         list="$arg" ;;
+            "list-add")         list="$list $arg" ;;
         esac
         param=""
     fi
@@ -62,6 +70,19 @@ function check_status () {
 }
 
 ########################################
+function check_installation () {
+    if [ -f "$conffile" ]; then
+        . $conffile
+        test -d $RTE_SDK            || install="yes"
+        test -f $DPDK_DEVBIND       || install="yes"
+        test -f $DPDK_IGB_UIO_DRV   || install="yes"
+    else
+        install="yes"
+    fi
+}
+########################################
+OS_ID=$(cat /etc/os-release | sed -rn 's/^ID=(\S+)$/\1/p')
+########################################
 ##  Install pre-requisites (assuming the tool is available)
 
 kvers=$(uname -r)
@@ -76,24 +97,36 @@ prereqs+=( "python@" ) # needed by dpdk-devbind
 prereqs+=( "lspci@pciutils" ) # needed by dpdk-devbind
 # CentOS:
 prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel-$kvers" )
-#prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel" )
 
-case "$version" in
-    "17.11"|"17.11.2")
-        prereqs+=( "/usr/include/numa.h@ubuntu:libnuma-dev,centos:numactl-devel" ) ;;
-esac
+prereqs+=( "/usr/include/numa.h@ubuntu:libnuma-dev,centos:numactl-devel" )
 
-if which install-packages.sh > /dev/null 2>&1 ; then
-    install-packages.sh ${prereqs[@]}
-        check_status "failed to install prerequisites"
+if [ "$OS_ID" == "fedora" ]; then
+    prereqs+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
 fi
+
+if ! which install-packages.sh > /dev/null 2>&1 ; then
+    scrname="install-packages.sh"
+    url="https://raw.githubusercontent.com/netronome-support"
+    url="$url/Tools/master/scr/$scrname"
+    echo " - Download $url and place in /usr/local/bin"
+    wget --quiet $url -O /usr/local/bin/$scrname
+        check_status "failed to download $url"
+    chmod a+x /usr/local/bin/$scrname
+        check_status "failed to make /usr/local/bin/$scrname executable"
+fi
+
+########################################
+
+install-packages.sh ${prereqs[@]}
+    check_status "failed to install prerequisites"
 
 ########################################
 
 if [ "$version" != "" ]; then
     conffile="/etc/$pkgname-$version.conf"
+    check_installation
 
-    if [ -f "$conffile" ] && [ "$REINSTALL" == "" ]; then
+    if [ "$install" == "" ]; then
         exit 0
     fi
 fi
@@ -154,8 +187,9 @@ fi
 ########################################
 
 conffile="/etc/$pkgname-$version.conf"
+check_installation
 
-if [ -f "$conffile" ] && [ "$REINSTALL" == "" ]; then
+if [ "$install" == "" ]; then
     exit 0
 fi
 
@@ -218,10 +252,11 @@ make -C $RTE_SDK config $opts
     check_status "failed to configure DPDK"
 
 ########################################
-
 ss=""
-ss="${ss}"'s/(CONFIG_RTE_LIBRTE_NFP_PMD)=.*$/\1=y/;'
-
+########################################
+for item in $list ; do
+    ss="${ss}s/(CONFIG_RTE_LIBRTE_$item)=.*"'$/\1=y/;'
+done
 ########################################
 # Custom configuration (via DPDK_CUSTOM_CONFIG)
 
@@ -240,8 +275,14 @@ while : ; do
 done
 
 ########################################
-sed -r "$ss" -i $RTE_SDK/build/.config \
-    || exit -1
+cfglist=()
+cfglist+=( "build/.config" )
+cfglist+=( "config/common_linuxapp" )
+cfglist+=( "config/common_base" )
+for cfgfile in ${cfglist[@]} ; do
+    sed -r "$ss" -i $RTE_SDK/$cfgfile
+        check_status "failed to access $RTE_SDK/$cfgfile"
+done
 
 ########################################
 # Save a copy of the configuration
@@ -287,6 +328,15 @@ if [ ! -h $RTE_SDK/$RTE_TARGET ]; then
 fi
 
 ########################################
+# Locate the 'igb_uio' driver
+
+igb_uio_drv_file=$(find $RTE_SDK -type f -name 'igb_uio.ko' \
+    | head -1)
+
+test "$igb_uio_drv_file" != ""
+    check_status "build did not produce an igb_uio driver"
+
+########################################
 
 devbind=$(find $RTE_SDK -name 'dpdk-devbind.py' \
     | head -1)
@@ -300,14 +350,18 @@ fi
 ########################################
 ##  Save DPDK settings
 
-( \
-    echo "# Generated on $(date) by $0" ; \
-    echo "export RTE_SDK=\"$RTE_SDK\"" ; \
-    echo "export RTE_TARGET=\"$RTE_TARGET\"" ; \
-    echo "export DPDK_VERSION=\"$version\"" ; \
-    echo "export DPDK_DEVBIND=\"$devbind\"" ; \
-    echo "export DPDK_CONFIG=\"$buildconfig\"" ; \
-) > $conffile
+cat <<EOF > $conffile
+# Generated on $(date) by $0
+export RTE_SDK="$RTE_SDK"
+export RTE_TARGET="$RTE_TARGET"
+export DPDK_VERSION="$version"
+export DPDK_DEVBIND="$devbind"
+# List of enabled RTE components:
+export DPDK_BUILD_LIST="$list"
+export DPDK_BUILD_TIME="$(date +'%s')"
+export DPDK_CONFIG="$buildconfig"
+export DPDK_IGB_UIO_DRV="$igb_uio_drv_file"
+EOF
 
 /bin/cp -f $conffile /etc/$pkgname.conf
 

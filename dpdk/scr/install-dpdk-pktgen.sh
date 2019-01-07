@@ -1,5 +1,6 @@
 #!/bin/bash
 
+install=""
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
@@ -8,7 +9,8 @@ for arg in "$@" ; do
                 exit 0
                 ;;
             "--verbose"|"-v")   optVerbose="yes" ;;
-            "--reinstall")      REINSTALL="yes" ;;
+            "--reinstall")      install="yes" ;;
+            "--force")          install="yes" ;;
             "--version")        param="version" ;;
             "--dpdk-version")   param="dpdk-version" ;;
         *)
@@ -82,6 +84,36 @@ function check_status () {
 }
 
 ########################################
+function check_installation () {
+    if [ -f "$conffile" ]; then
+        . $conffile
+        test -d $DPDK_PKTGEN_DIR    || install="yes"
+        test -f $DPDK_PKTGEN_EXEC   || install="yes"
+        if [ "$DPDK_BUILD_TIME" != "" ]; then
+            if [ $DPDK_BUILD_TIME -gt $DPDK_PKTGEN_BUILD_TIME ]; then
+                install="yes"
+            fi
+        fi
+    else
+        install="yes"
+    fi
+}
+########################################
+# Verify that the
+if ! which install-packages.sh > /dev/null 2>&1 ; then
+    scrname="install-packages.sh"
+    url="https://raw.githubusercontent.com/netronome-support"
+    url="$url/Tools/master/scr/$scrname"
+    echo " - Download $url and place in /usr/local/bin"
+    wget --quiet $url -O /usr/local/bin/$scrname \
+        || exit -1
+    chmod a+x /usr/local/bin/$scrname \
+        || exit -1
+fi
+########################################
+OS_ID=$(cat /etc/os-release | sed -rn 's/^ID=(\S+)$/\1/p')
+OS_VERSION=$(cat /etc/os-release | sed -rn 's/^VERSION_ID=(\S+)$/\1/p')
+########################################
 ##  Install pre-requisites (assuming the tool is available)
 
 prereqs=()
@@ -92,8 +124,19 @@ prereqs+=( "patch@" )
 prereqs+=( "gcc@ubuntu:build-essential,centos:gcc" )
 prereqs+=( "make@ubuntu:build-essential,centos:gcc" )
 
-# Ubuntu:
-prereqs+=( "lua5.2@ubuntu:lua5.2" )
+case "$OS_ID" in
+  "ubuntu")
+    prereqs+=( "lua5.2@lua5.2" )
+    case "$OS_VERSION" in
+        "18.04") prereqs+=( "/usr/include/lua5.3/lua.h@liblua5.3-dev" ) ;;
+    esac
+    ;;
+  "fedora")
+    prereqs+=( "lua@" )
+    prereqs+=( "/usr/include/lua.h@lua-devel" )
+    ;;
+esac
+
 prereqs+=( "/usr/include/pcap/pcap.h@ubuntu:libpcap-dev,centos:libpcap-devel" )
 
 # Strange ... I had to manually install libpcap-dev
@@ -101,12 +144,15 @@ prereqs+=( "/usr/include/pcap/pcap.h@ubuntu:libpcap-dev,centos:libpcap-devel" )
 install-packages.sh ${prereqs[@]}
     check_status "failed to install prerequisites"
 
+if [ "$OS_ID" == "fedora" ]; then
+    cp -f /usr/lib64/pkgconfig/lua.pc /usr/lib64/pkgconfig/lua5.3.pc
+fi
 ########################################
 
 if [ "$version" != "" ]; then
     conffile="/etc/$pkgname-$DPDK_VERSION-$version.conf"
-
-    if [ -f "$conffile" ] && [ "$REINSTALL" == "" ]; then
+    check_installation
+    if [ "$install" == "" ]; then
         exit 0
     fi
 fi
@@ -162,8 +208,9 @@ fi
 ########################################
 
 conffile="/etc/$pkgname-$DPDK_VERSION-$version.conf"
+check_installation
 
-if [ -f "$conffile" ] && [ "$REINSTALL" == "" ]; then
+if [ "$install" == "" ]; then
     exit 0
 fi
 
@@ -199,6 +246,11 @@ fi
 touch $RTE_SDK/build/include/rte_bus_pci.h
 
 ########################################
+test -d $RTE_SDK
+    check_status "missing DPDK installation"
+test "$RTE_TARGET" != ""
+    check_status "RTE_TARGET is not set"
+########################################
 
 export RTE_ARCH=
 export RTE_OUTPUT="$HOME/.cache/dpdk/build/$pkgname-$DPDK_VERSION-$version"
@@ -217,15 +269,16 @@ execfile=$(find $pkgdir/app -name 'pktgen' -executable \
 test "$execfile" != ""
     check_status "failed to find pktgen executable"
 
-( \
-    echo "# Generated on $(date) by $0" ; \
-    echo "export DPDK_PKTGEN_VERSION=$version" ; \
-    echo "export DPDK_VERSION=$DPDK_VERSION" ; \
-    echo "export DPDK_RTE_SDK=$RTE_SDK" ; \
-    echo "export DPDK_RTE_TARGET=$RTE_TARGET" ; \
-    echo "export DPDK_PKTGEN_DIR=$pkgdir" ; \
-    echo "export DPDK_PKTGEN_EXEC=$execfile" ; \
-) > $conffile
+cat <<EOF > $conffile
+# Generated on $(date) by $0
+export DPDK_PKTGEN_VERSION="$version"
+export DPDK_VERSION="$DPDK_VERSION"
+export DPDK_RTE_SDK="$RTE_SDK"
+export DPDK_RTE_TARGET="$RTE_TARGET"
+export DPDK_PKTGEN_DIR="$pkgdir"
+export DPDK_PKTGEN_EXEC="$execfile"
+export DPDK_PKTGEN_BUILD_TIME="$(date +'%s')"
+EOF
 
 /bin/cp -f $conffile /etc/$pkgname.conf
 
