@@ -7,8 +7,15 @@
 tmpdir=$(mktemp --directory)
 capname="capture-$(date +'%Y-%m-%d-%H%M')"
 capdir="$tmpdir/$capname"
-
 mkdir -p $capdir
+########################################################
+function f_mkdir () {
+    local dname="$1"
+    mkdir --mode 755 -p $capdir/$dname
+    if [ $? -ne 0 ]; then
+        echo "WARNING: failed to create $capdir/$dname"
+    fi
+}
 
 ########################################################
 if [ "$(whoami)" != "root" ]; then
@@ -79,9 +86,11 @@ if [ -d $nfp_drv_dir ]; then
     for nfpdir in $nfplist ; do
         list+=( "$nfpdir/numa_node" )
         list+=( "$nfpdir/irq" )
-        nfp_if_dir=$(find $nfpdir/net -maxdepth 1 -mindepth 1 -type d | head -1)
-        if [ -d $nfp_if_dir ]; then
-            nfp_access_iface_list+=( $(basename $nfp_if_dir) )
+        if [ -d $nfpdir/net ]; then
+            nfp_if_dir=$(find $nfpdir/net -maxdepth 1 -mindepth 1 -type d | head -1)
+            if [ -d $nfp_if_dir ]; then
+                nfp_access_iface_list+=( $(basename $nfp_if_dir) )
+            fi
         fi
     done
 fi
@@ -137,7 +146,7 @@ function run () {
     else
         local dirname=$(dirname "$fname")
         if [ "$dirname" != "" ] && [ "$dirname" != "." ]; then
-            mkdir -p $capdir/$dirname || exit -1
+            f_mkdir $dirname
         fi
         local capfile="$capdir/$fname"
     fi
@@ -198,7 +207,6 @@ run "lscpu" ""                  "lscpu.txt"
 run "lspci" ""                  "lspci.txt"
 run "lspci" "-vvv"              "lspci-vvv.txt"
 run "lspci" "-x"                "lspci-x.txt"
-run "dmesg" ""                  "log/dmesg.txt"
 run "yum" "list"                "yum-list.txt"
 run "dpkg" "--get-selections"   "dpkg-get-selections.txt"
 run "dpkg" "-l"                 "dpkg-l.txt"
@@ -230,6 +238,7 @@ run "/opt/netronome/bin/nfp-arm" "-D" "nfp/arm-D.txt"
 run "/opt/netronome/bin/nfp-phymod" "" "nfp/phymod.txt"
 run "/opt/netronome/bin/nfp-res" "-L" "nfp/locks.txt"
 
+run "dpdk-devbind.py" "--status" "dpdk-devbind-status.txt"
 run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
 
 ########################################################
@@ -257,21 +266,21 @@ done
 if which virsh > /dev/null 2>&1; then
     for vmname in $(virsh list --all --name) ; do
         vmdir="$capdir/virsh/vms/$vmname"
-        mkdir -p $vmdir
+        f_mkdir "virsh/vms/$vmname"
         virsh dumpxml $vmname > $vmdir/config.xml
         virsh dominfo $vmname > $vmdir/dominfo.txt
         virsh vcpuinfo $vmname > $vmdir/vcpuinfo.txt 2>&1
     done
     for netname in $(virsh net-list --name) ; do
         netdir="$capdir/virsh/net/$netname"
-        mkdir -p $netdir
+        f_mkdir "virsh/net/$netname"
         virsh net-dumpxml $netname > $netdir/config.xml
         virsh net-dhcp-leases $netname > $netdir/leases.txt
     done
 fi
 
 ########################################################
-mkdir -p $capdir/log
+f_mkdir "log"
 if [ -d /var/log ]; then
     find /var/log -type f -ls \
         > $capdir/log/file-list.txt
@@ -294,6 +303,25 @@ for logfile in $loglist ; do
 done
 
 ########################################################
+
+dmesg --kernel \
+    | tail -1000 \
+    > $capdir/log/dmesg-kernel.log
+
+dmesg --level err,warn \
+    | tail -1000 \
+    > $capdir/log/dmesg-err-warn.log
+
+dmesg --syslog \
+    | tail -1000 \
+    > $capdir/log/dmesg-syslog.log
+
+dmesg \
+    | grep -E '(nfp|kvm|virtiorelayd|virtio-forward|vio4wd)' \
+    | tail -1000 \
+    > $capdir/log/dmesg-netronome.log
+
+########################################################
 # Capture listing of initramfs files
 
 kvers=$(uname -r)
@@ -314,7 +342,7 @@ fi
 # Capture Kernel Module Information
 
 midir="$capdir/modinfo"
-mkdir -p $midir
+f_mkdir "modinfo"
 modlist=$(lsmod \
     | tail -n +2 \
     | sed -rn 's/^(\S+)\s.*$/\1/p')
@@ -333,17 +361,21 @@ if which ethtool > /dev/null 2>&1; then
     flaglist+=( "--driver" ) # Get Driver Information (-i)
     flaglist+=( "--show-features" ) # Show netdev feature list (-k)
     flaglist+=( "--module-info" ) # Show Module Information (-m)
-    mkdir -p $ifdir/info $ifdir/stats
+    f_mkdir "ethtool/info"
+    f_mkdir "ethtool/stats"
     for ifname in $iflist ; do
         for flag in ${flaglist[@]} ; do
             {   printf "\n-- 'ethtool $flag'\n"
                 ethtool ${flag} $ifname
             } >> $ifdir/info/$ifname.txt 2>&1
         done
+        run "ethtool" "--set-dump $ifname 0" ""
+        run "ethtool" "--get-dump $ifname data /dev/stdout" \
+            "ethtool/ifdata/$ifname.txt"
         run "ethtool" "-S $ifname" "ethtool/stats/$ifname.txt"
         if [ "$SYS_INV_CAPTURE_ETHTOOL_DUMPS" != "" ]; then
             dmpdir="$ifdir/dump"
-            mkdir -p $dmpdir
+            f_mkdir "ethtool/dump"
             # Set Debug-Level to '2'
             run "ethtool" "--set-dump $ifname 2" ""
             # Collect Debug Information
@@ -357,7 +389,7 @@ fi
 # Capture OVS-TC flows
 
 if which tc > /dev/null 2>&1 ; then
-    mkdir -p $capdir/ovs-tc
+    f_mkdir "ovs-tc"
     for ifname in $iflist ; do
         run "tc" "-s filter show dev $ifname parent ffff:" "ovs-tc/$ifname.flows"
     done
@@ -368,7 +400,7 @@ fi
 ########################################################
 OVS=""
 if which ovs-vsctl > /dev/null 2>&1 ; then
-    mkdir -p $capdir/ovs
+    f_mkdir "ovs"
 
     run "ovs-vsctl" "--version" "ovs/vsctl-version.txt"
 
@@ -395,7 +427,7 @@ fi
 
 listfile="$capdir/bond-list.txt"
 if [ -f $listfile ] && [ "$OVS" != "" ]; then
-    mkdir -p $capdir/ovs/bond
+    f_mkdir "ovs/bond"
     bondlist=$(cat $listfile \
         | tail -n +2 \
         | cut -f 1)
@@ -411,7 +443,7 @@ fi
 if [ "$OVS" != "" ]; then
     for brname in $(ovs-vsctl list-br) ; do
         brdir="$capdir/ovs/br/$brname"
-        mkdir -p $brdir
+        f_mkdir "ovs/br/$brname"
         ovs-vsctl list-ports  $brname \
             > $brdir/vsctl-ports.txt
         ovs-ofctl dump-ports -O OpenFlow13 $brname \
@@ -424,7 +456,22 @@ if [ "$OVS" != "" ]; then
             > $brdir/ofctl-fdb-show.txt
     done
 fi
-        
+
+########################################################
+
+if [ -x /opt/netronome/bin/ovs-ctl ]; then
+    nfp_iface_list=$(cat /proc/net/dev\
+        | sed -rn 's/^\s*(nfp_\S+):.*$/\1/p')
+    for iface in $nfp_iface_list ; do
+            >> $capdir/ovs-ctl-status-wire.txt
+        status=$(/opt/netronome/bin/ovs-ctl status wire $iface 2> /dev/null)
+        if [ $? -eq 0 ]; then
+            printf "%-12s %s\n" "$iface:" "$status" \
+                >> $capdir/ovs-ctl-status-wire.txt
+        fi
+    done
+fi
+
 ########################################################
 # Contrail vRouter Dataplane commands
 
@@ -442,6 +489,8 @@ sample "s2"
 /bin/cp $0 --target-directory $capdir
 
 ########################################################
+
+chmod u+rw --recursive $capdir
 
 tar cz -C $tmpdir -f $HOME/$capname.tgz $capname
 
