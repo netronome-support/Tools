@@ -22,7 +22,9 @@ iflist=()
 
 for iface in $list ; do
     re_nfp='^nfp_v[0-9]\.[0-9]{1,2}$'
-    if [[ ! "$iface" =~ $re_nfp ]]; then
+    if [ "$iface" == "lo" ]; then
+        :
+    elif [[ ! "$iface" =~ $re_nfp ]]; then
         iflist+=( "$iface" )
     else
         ifset[$iface]="Y"
@@ -46,9 +48,18 @@ for iface in ${iflist[@]} ; do
         | tr '\n' '@')
     drv=$(echo $info \
         | sed -rn 's/^.*driver:\s*(\S+)@.*$/\1/p')
-    pci=$(echo $info \
+    opt=$(echo $info \
         | sed -rn 's/^.*@bus-info: ([^@]*)@.*$/\1/p')
-    printf "  %-18s %-18s %s\n" "$iface" "$drv" "$pci"
+    if [ "$opt" == "" ]; then
+        ppfile="/sys/class/net/$iface/phys_port_name"
+        if [ -f $ppfile ]; then
+            phys_port=$(cat $ppfile 2> /dev/null)
+            if [ "$phys_port" != "" ]; then
+                opt="- $phys_port"
+            fi
+        fi
+    fi
+    printf "  %-16s %-16s %s\n" "$iface" "$drv" "$opt"
 done
 
 ########################################################################
