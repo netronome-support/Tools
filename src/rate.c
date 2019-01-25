@@ -3,9 +3,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/time.h>
+#include <ctype.h>
 #include <unistd.h>
 
-#define F_LIST_LONG         (1 << 0)
+#define F_LIST_COUNT        (1 << 0)
 #define F_LIST_REF          (1 << 1)
 #define F_LIST_DROP         (1 << 2)
 #define F_LIST_ONCE         (1 << 3)
@@ -162,7 +163,7 @@ printCntSet (int mode, int flags, char *str,
         n += sprintf(&str[n], "%8s", buf);
     }
     /* Print packet counter */
-    if (flags & F_LIST_LONG) {
+    if (flags & F_LIST_COUNT) {
         n += sprintf(&str[n], "  %12llu",
           (long long unsigned int) cp1->pkt - ((flags & F_LIST_REF)
             ? ref.pkt : 0));
@@ -170,7 +171,8 @@ printCntSet (int mode, int flags, char *str,
     /* Print drop counter */
     if (flags & F_LIST_DROP) {
         n += sprintf(&str[n], "  %12llu",
-          cp1->drop - ((flags & F_LIST_REF) ? ref.drop : 0));
+          (long long unsigned int)
+          (cp1->drop - ((flags & F_LIST_REF) ? ref.drop : 0)));
     }
     return n;
 }
@@ -192,7 +194,7 @@ printHeader (char *str, int flags)
         strcat(head, "     APS");
         w += 8;
     }
-    if (flags & F_LIST_LONG) {
+    if (flags & F_LIST_COUNT) {
         strcat(head, "           cnt");
         w += 14;
     }
@@ -309,7 +311,9 @@ main (int argc, char *argv[]) {
         else if (strcmp(a, "--hist") == 0)
             hist = (int) (1e6 * atof(argv[++i]));
         else if (strcmp(a, "--long") == 0)
-            flags |= F_LIST_LONG;
+            flags |= F_LIST_COUNT;
+        else if (strcmp(a, "--count") == 0)
+            flags |= F_LIST_COUNT;
         else if (strcmp(a, "--list-drop") == 0)
             flags |= F_LIST_DROP;
         else if (strcmp(a, "--reset") == 0)

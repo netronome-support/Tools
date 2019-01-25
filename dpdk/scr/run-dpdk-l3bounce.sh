@@ -2,6 +2,8 @@
 
 prtidx="$1"
 
+projname="l3bounce"
+
 # This script makes a copy of l2fwd and modifies it so that packets are returned
 # to the port that they came in on and with reversed IP and Ethernet addresses.
 #
@@ -27,14 +29,14 @@ if [ ! -d $RTE_SDK/examples/l2fwd ]; then
     exit -1
 fi
 
-l3bdir="/opt/src/l3bounce"
-mkdir -p $l3bdir
+srcdir="/opt/src/$projname"
+mkdir -p $srcdir
 /bin/cp -f \
     $RTE_SDK/examples/l2fwd/* \
-    $l3bdir \
+    $srcdir \
     || exit -1
 
-cat <<EOF > $l3bdir/bounce.c
+cat <<EOF > $srcdir/bounce.c
 
 #include <stdint.h>
 #include <rte_ether.h>
@@ -70,44 +72,44 @@ l3bounce(struct rte_mbuf *m, unsigned portid)
 EOF
 
 sed -r 's/\sl2fwd_simple_forward/l3bounce/' \
-    -i $l3bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/(X_DESC_DEFAULT)\s+[0-9]+$/\1 1024/' \
-    -i $l3bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/(define NB_MBUF)\s+[0-9]+$/\1 32768/' \
-    -i $l3bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/^(l2fwd_simple_forward)/__attribute__((unused)) \1/' \
-    -i $l3bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/l2fwd_/l3b_/g' \
-    -i $l3bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 incl="#include \"bounce.c\""
 sed -r "/^static uint64_t timer_period/a $incl" \
-    -i $l3bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/^(APP).*$/\1 = l3bounce/' \
-    -i $l3bdir/Makefile \
+    -i $srcdir/Makefile \
     || exit -1
 
-export RTE_OUTPUT="$HOME/.cache/dpdk/l3bounce"
+export RTE_OUTPUT="$HOME/.cache/dpdk/$projname"
 mkdir -p $RTE_OUTPUT
 
-make -C $l3bdir install \
+make -C $srcdir install \
     || exit -1
 
 printf -v coremask "0x%04x" $(( 1 << ( prtidx + 1 ) ))
 printf -v portmask "0x%04x" $(( 1 << ( prtidx ) ))
 
-cmd=( "$RTE_OUTPUT/l3bounce" )
+cmd=( "$RTE_OUTPUT/$projname" )
 cmd+=( "-c" "$coremask" )
 cmd+=( "-n" "2" )
 cmd+=( "-m" "128" )
@@ -116,7 +118,7 @@ cmd+=( "--" )
 cmd+=( "-T" "1" )
 cmd+=( "-p" "$portmask" )
 
-cat << EOF | tee -a /var/log/dpdk-l3bounce.cmd
+cat << EOF | tee -a /var/log/dpdk-$projname.cmd
 --------------------------------
 Date: $(date)
 Command:  ${cmd[@]}
