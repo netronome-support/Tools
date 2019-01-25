@@ -2,6 +2,8 @@
 
 prtidx="$1"
 
+projname="l4bounce"
+
 # This script makes a copy of l2fwd and modifies it so that packets are returned
 # to the port that they came in on and with reversed IP and Ethernet addresses.
 #
@@ -27,14 +29,14 @@ if [ ! -d $RTE_SDK/examples/l2fwd ]; then
     exit -1
 fi
 
-l4bdir="/opt/src/l4bounce"
-mkdir -p $l4bdir
+srcdir="/opt/src/$projname"
+mkdir -p $srcdir
 /bin/cp -f \
     $RTE_SDK/examples/l2fwd/* \
-    $l4bdir \
+    $srcdir \
     || exit -1
 
-cat <<EOF > $l4bdir/bounce.c
+cat <<EOF > $srcdir/bounce.c
 
 #include <stdint.h>
 #include <rte_ether.h>
@@ -84,53 +86,53 @@ l4bounce(struct rte_mbuf *m, unsigned portid)
 EOF
 
 sed -r 's/\sl2fwd_simple_forward/l4bounce/' \
-    -i $l4bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/(X_DESC_DEFAULT)\s+[0-9]+$/\1 1024/' \
-    -i $l4bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/(define NB_MBUF)\s+[0-9]+$/\1 32768/' \
-    -i $l4bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/^(l2fwd_simple_forward)/__attribute__((unused)) \1/' \
-    -i $l4bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/l2fwd_/l4b_/g' \
-    -i $l4bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 incl="#include \"bounce.c\""
 sed -r "/^static uint64_t timer_period/a $incl" \
-    -i $l4bdir/main.c \
+    -i $srcdir/main.c \
     || exit -1
 
 sed -r 's/^(APP).*$/\1 = l4bounce/' \
-    -i $l4bdir/Makefile \
+    -i $srcdir/Makefile \
     || exit -1
 
-export RTE_OUTPUT="$HOME/.cache/dpdk/l4bounce"
+export RTE_OUTPUT="$HOME/.cache/dpdk/$projname"
 mkdir -p $RTE_OUTPUT
 
-make -C $l4bdir install \
+make -C $srcdir install \
     || exit -1
 
 printf -v coremask "0x%04x" $(( 1 << ( prtidx + 1 ) ))
 printf -v portmask "0x%04x" $(( 1 << ( prtidx ) ))
 
-cmd=( "$RTE_OUTPUT/l4bounce" )
+cmd=( "$RTE_OUTPUT/$projname" )
 cmd+=( "-c" "$coremask" )
 cmd+=( "-n" "2" )
 cmd+=( "-m" "128" )
-cmd+=( "--file-prefix" "l4b_p$prtidx" )
+cmd+=( "--file-prefix" "$projname_p$prtidx" )
 cmd+=( "--" )
 cmd+=( "-T" "1" )
 cmd+=( "-p" "$portmask" )
 
-cat << EOF | tee -a /var/log/dpdk-l4bounce.cmd
+cat << EOF | tee -a /var/log/dpdk-$projname.cmd
 --------------------------------
 Date: $(date)
 Command:  ${cmd[@]}

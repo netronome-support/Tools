@@ -16,6 +16,7 @@ if [ ! -f $tools_dir/install.sh ]; then
 fi
 
 cp -f $tools_dir/scr/* $TOOLS_DEST_DIR
+cp -f $tools_dir/dpdk/scr/* $TOOLS_DEST_DIR
 
 # Install GCC
 pkglist=()
@@ -24,6 +25,7 @@ $TOOLS_DEST_DIR/install-packages.sh ${pkglist[@]} \
     || exit -1
 
 gcc $tools_dir/src/rate.c -o $TOOLS_DEST_DIR/rate
+gcc $tools_dir/src/ofrates.c -o $TOOLS_DEST_DIR/ofrates
 
 echo "SUCCESS"
 exit 0
