@@ -59,6 +59,10 @@ cmd+=( "--nb-cores=2" )
 cmd+=( "--disable-hw-vlan" )
 cmd+=( "--forward-mode=io" )
 cmd+=( "--auto-start" )
+# Performance Optimizations:
+cmd+=( "--rxd" "512" )
+cmd+=( "--txd" "2048" )
+cmd+=( "--burst" "128" )
 
 ############################################################
 logdir="/var/log"
