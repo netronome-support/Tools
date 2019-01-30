@@ -124,6 +124,7 @@ for fname in "${list[@]}" ; do
 done
 
 ########################################################
+
 function run () {
     local cmd="$1"
     local args="$2"
@@ -193,6 +194,19 @@ function sample () {
         done
     fi
 }
+
+########################################################
+
+iflist=$(cat /proc/net/dev \
+    | sed -rn 's/^\s*(\S+):.*$/\1/p')
+
+########################################################
+# Try some of the tools (if installed) from:
+#   http://github.com/netronome-support/Tools
+
+run "rate" "--once --long --interval 1 --pktsize $iflist" "rate.txt"
+
+run "list-iface-info.sh" "" "iface-info.txt"
 
 ########################################################
 
@@ -350,9 +364,6 @@ for modname in $modlist ; do
     modinfo $modname > $midir/$modname.info
 done
 
-########################################################
-iflist=$(cat /proc/net/dev \
-    | sed -rn 's/^\s*(\S+):.*$/\1/p')
 ########################################################
 if which ethtool > /dev/null 2>&1; then
     ifdir="$capdir/ethtool"
