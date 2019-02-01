@@ -1,12 +1,28 @@
 #!/bin/bash
 
 ########################################################################
-
-# Log File Location
-: "${NS_INSTALL_LOG_DIR:=/var/log/install}"
+##  Defaults:
 
 # URL of NFP Driver Git Repository
 : "${NS_GIT_NFP_DRV_REPO_URL:=https://github.com/Netronome/nfp-drv-kmods}"
+
+if [ "$(whoami)" == "root" ]; then
+    # Installation Directory
+    : ${GIT_REPO_BASE_DIR:="/opt/src/netronome-support"}
+
+    # Log File Location
+    : "${NS_INSTALL_LOG_DIR:=/var/log/install}"
+
+    # No need for 'sudo'
+    SUDO=""
+else
+    : ${GIT_REPO_BASE_DIR:="$HOME/build/git/netronome"}
+    : "${NS_INSTALL_LOG_DIR:=$HOME/.logs}"
+    : ${DPDK_INSTALL_DIR:="$HOME/build"}
+    : ${DPDK_DOWNLOAD_DIR:="$HOME/.cache/download"}
+    : ${DPDK_SETTINGS_DIR:="$HOME/.config/dpdk"}
+    SUDO="sudo"
+fi
 
 ########################################################################
 
@@ -20,16 +36,12 @@ function check_status () {
 
 ########################################################################
 
-if ! which install-packages.sh > /dev/null 2>&1 ; then
-    scrname="install-packages.sh"
-    url="https://raw.githubusercontent.com/netronome-support"
-    url="$url/Tools/master/scr/$scrname"
-    echo " - Download $url and place in /usr/local/bin"
-    wget --quiet $url -O /usr/local/bin/$scrname
-        check_status "failed to download $url"
-    chmod a+x /usr/local/bin/$scrname
-        check_status "failed to make /usr/local/bin/$scrname executable"
-fi
+which install-packages.sh > /dev/null 2>&1
+    check_status "missing 'install-packages.sh"
+
+# To install:
+#   git clone https://github.com/netronome-support/Tools
+#   sudo ./Tools/install.sh
 
 ########################################################################
 
@@ -45,16 +57,17 @@ pkgs+=( "/usr/src/linux-headers-$(uname -r)/include@ubuntu:linux-headers-$(uname
 pkgs+=( "openssl@" "perl@" "mokutil@" )
 pkgs+=( "keyctl@keyutils" )
 
-install-packages.sh ${pkgs[@]} \
-    || exit -1
+install-packages.sh ${pkgs[@]}
+    check_status "failed to install pre-requisite packages"
 
 ########################################################################
 logdir=$NS_INSTALL_LOG_DIR
 mkdir -p $logdir
+    check_status "failed to create '$logdir'"
 
 ########################################################################
 
-drvdir="/opt/git/nfp-drv-kmods"
+drvdir="$GIT_REPO_BASE_DIR/nfp-drv-kmods"
 if [ ! -d $drvdir ]; then
     echo " - Clone $NS_GIT_NFP_DRV_REPO_URL"
     git clone $NS_GIT_NFP_DRV_REPO_URL $drvdir
@@ -77,8 +90,8 @@ mokutil --disable-validation
 ########################################################################
 
 make -C $drvdir \
-    | tee $logdir/make-nfp-drv-kmods.log \
-    || exit -1
+    | tee $logdir/make-nfp-drv-kmods.log
+    check_status "failed to compile NFP Driver kmods"
 
 ########################################################################
 
@@ -86,33 +99,44 @@ if [ "$SKIP_INSTALL" != "" ]; then
     exit 0
 fi
 
-make -C $drvdir install \
+$SUDO make -C $drvdir install 2>&1 \
     | tee $logdir/make-install-nfp-drv-kmods.log \
-    || exit -1
+    | grep -v "SSL error" \
+    | grep -vE "^sign-file"
+    check_status "failed to install NFP Driver kmods"
 
 ########################################################################
 
 ko_file="$drvdir/src/nfp.ko"
 
-if [ ! -f $ko_file ]; then
-    echo "ERROR: NFP driver missing at $ko_file"
-    exit -1
-fi
+test -f $ko_file
+    check_status "NFP driver missing at $ko_file"
 
 ########################################################################
 
-mkdir -p /etc/NetworkManager/conf.d
-cat <<EOF > /etc/NetworkManager/conf.d/nfp.conf
+tmpdir=$(mktemp --directory)
+
+nm_cfg_dir="/etc/NetworkManager/conf.d"
+
+$SUDO mkdir -p $nm_cfg_dir
+    check_status "failed to create $nm_cfg_dir"
+
+$SUDO cat <<EOF > $tmpdir/nfp.conf
 # Added by $0 on $(date)
 [keyfile]
 unmanaged-devices=driver:nfp,driver:nfp_netvf
 EOF
 
-cat <<EOF > /etc/modprobe.d/nfp-drv-location.conf
+$SUDO cat <<EOF > $tmpdir/nfp-drv-location.conf
 install nfp insmod $drvdir/src/nfp.ko
 EOF
 
-depmod --all
+$SUDO cp -f $tmpdir/nfp.conf $nm_cfg_dir
+$SUDO cp -f $tmpdir/nfp-drv-location.conf /etc/modprobe.d
+
+$SUDO depmod --all
+
+rm -rf $tmpdir
 
 ########################################################################
 echo "SUCCESS($(basename $0))"

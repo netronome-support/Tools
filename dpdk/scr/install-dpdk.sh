@@ -1,8 +1,43 @@
 #!/bin/bash
 
-install=""
-list="NFP_PMD"
+########################################
+##  Defaults:
+
+# List of CONFIG_RTE_LIBRTE_ features to enable
+: ${DPDK_CFG_LIBRTE_LIST:="NFP_PMD"}
 # MLX4_PMD MLX5_PMD
+
+# Compile Target Architecture for DPDK
+: ${RTE_TARGET:="x86_64-native-linuxapp-gcc"}
+
+# DPDK Web Site
+: ${DPDK_DOWNLOAD_URL:="https://fast.dpdk.org/rel"}
+
+if [ "$(whoami)" == "root" ]; then
+    # Installation Directory
+    : ${DPDK_INSTALL_DIR:="/opt/src"}
+
+    # DPDK Download Directory
+    : ${DPDK_DOWNLOAD_DIR:="/var/cache/download"}
+
+    # DPDK Installation Parameter Directory
+    : ${DPDK_SETTINGS_DIR:="/etc"}
+
+    # No need for 'sudo'
+    SUDO=""
+else
+    : ${DPDK_INSTALL_DIR:="$HOME/build"}
+    : ${DPDK_DOWNLOAD_DIR:="$HOME/.cache/download"}
+    : ${DPDK_SETTINGS_DIR:="$HOME/.config/dpdk"}
+    SUDO="sudo"
+fi
+
+########################################
+##  Parse command line
+
+pkgname="dpdk"
+install=""
+
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
@@ -29,35 +64,12 @@ for arg in "$@" ; do
     else
         case "$param" in
             "version")          version="$arg" ;;
-            "list-set")         list="$arg" ;;
-            "list-add")         list="$list $arg" ;;
+            "list-set")         DPDK_CFG_LIBRTE_LIST="$arg" ;;
+            "list-add")         DPDK_CFG_LIBRTE_LIST="$DPDK_CFG_LIBRTE_LIST $arg" ;;
         esac
         param=""
     fi
 done
-
-########################################
-
-if [ "${version}${pkgfile}${pkgdir}" == "" ]; then
-    echo "ERROR: please specify either version, package file, or package directory"
-    exit -1
-fi
-
-########################################
-
-pkgname="dpdk"
-
-# Installation Directory
-: "${DPDK_INSTALL_DIR:=/opt/src}"
-
-# Compile Target Architecture for DPDK
-: "${RTE_TARGET:=x86_64-native-linuxapp-gcc}"
-
-# DPDK Download Directory
-: "${DPDK_DOWNLOAD_DIR:=/var/cache/download}"
-
-# DPDK Web Site
-: "${DPDK_DOWNLOAD_URL:=https://fast.dpdk.org/rel}"
 
 ########################################
 
@@ -70,6 +82,12 @@ function check_status () {
 }
 
 ########################################
+
+test "${version}${pkgfile}${pkgdir}" != ""
+    check_status "please specify either version, package file, or package directory"
+
+########################################
+
 function check_installation () {
     if [ -f "$conffile" ]; then
         . $conffile
@@ -80,8 +98,11 @@ function check_installation () {
         install="yes"
     fi
 }
+
 ########################################
-OS_ID=$(cat /etc/os-release | sed -rn 's/^ID=(\S+)$/\1/p')
+if [ -f /etc/os-release ]; then
+    OS_ID=$(cat /etc/os-release | sed -rn 's/^ID=(\S+)$/\1/p')
+fi
 ########################################
 ##  Install pre-requisites (assuming the tool is available)
 
@@ -97,12 +118,19 @@ prereqs+=( "python@" ) # needed by dpdk-devbind
 prereqs+=( "lspci@pciutils" ) # needed by dpdk-devbind
 # CentOS:
 prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel-$kvers" )
+#prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel" )
 
+#case "$version" in
+#    "17.11"|"17.11.2")
 prereqs+=( "/usr/include/numa.h@ubuntu:libnuma-dev,centos:numactl-devel" )
+#esac
 
 if [ "$OS_ID" == "fedora" ]; then
     prereqs+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
 fi
+
+########################################
+##  Download 'install-packages.sh' script if missing
 
 if ! which install-packages.sh > /dev/null 2>&1 ; then
     scrname="install-packages.sh"
@@ -135,9 +163,9 @@ fi
 ##  Try to find a local DPDK package
 
 srchlist=()
+srchlist+=( "$DPDK_DOWNLOAD_DIR" )
 srchlist+=( "$(pwd)" )
 srchlist+=( "$HOME" )
-srchlist+=( "$DPDK_DOWNLOAD_DIR" )
 srchlist+=( "/var/cache/download" )
 srchlist+=( "/opt/download" )
 srchlist+=( "/pkgs/dpdk" )
@@ -146,7 +174,7 @@ srchlist+=( "/tmp" )
 if [ "$pkgfile" == "" ] && [ "$pkgdir" == "" ]; then
     for srchdir in ${srchlist[@]} ; do
         if [ -d "$srchdir" ]; then
-            fn=$(find $srchdir -type f -name "$pkgname-$version.tar*" \
+            fn=$(find $srchdir -maxdepth 1 -type f -name "$pkgname-$version.tar*" \
                 | head -1)
             if [ "$fn" != "" ]; then
                 pkgfile="$fn"
@@ -154,6 +182,9 @@ if [ "$pkgfile" == "" ] && [ "$pkgdir" == "" ]; then
             fi
         fi
     done
+    if [ "$pkgfile" != "" ]; then
+        echo " - Found $pkgname package at $pkgfile"
+    fi
 fi
 
 ########################################
@@ -163,11 +194,11 @@ if [ "$pkgfile" == "" ] && [ "$pkgdir" == "" ]; then
     mkdir -p $DPDK_DOWNLOAD_DIR
         check_status "failed to create $DPDK_DOWNLOAD_DIR"
     dlfile="$DPDK_DOWNLOAD_DIR/pend-$fname"
-    echo " - Downloading $DPDK_DOWNLOAD_URL/$fname"
+    echo " - Download $DPDK_DOWNLOAD_URL/$fname"
     wget --no-verbose "$DPDK_DOWNLOAD_URL/$fname" -O "$dlfile"
         check_status "failed to download $DPDK_DOWNLOAD_URL/$fname"
     pkgfile="$DPDK_DOWNLOAD_DIR/$fname"
-    /bin/mv -f "$dlfile" "$pkgfile"
+    mv -f "$dlfile" "$pkgfile"
         check_status "failed to move $dlfile"
 fi
 
@@ -186,8 +217,11 @@ fi
 
 ########################################
 
-conffile="/etc/$pkgname-$version.conf"
+conffile="$DPDK_SETTINGS_DIR/$pkgname-$version.conf"
 check_installation
+
+########################################
+##  Stop here if it appears to already been installed
 
 if [ "$install" == "" ]; then
     exit 0
@@ -197,6 +231,7 @@ fi
 
 if [ "$pkgdir" == "" ]; then
     mkdir -p $DPDK_INSTALL_DIR
+        check_status "failed to create $DPDK_INSTALL_DIR"
 
     tar x -C $DPDK_INSTALL_DIR -f $pkgfile
         check_status "failed to un-tar $pkgfile"
@@ -218,18 +253,7 @@ opts=""
 opts="$opts T=$RTE_TARGET"
 
 ########################################
-
-# Needed for DPDK-DAQ installation:
-if [ "$BUILD_FOR_DPDK_DAQ" != "" ]; then
-    echo "export EXTRA_CFLAGS=-O0 -fPIC -g" \
-        >> $RTE_SDK/mk/rte.vars.mk
-    opts="$opts CONFIG_RTE_BUILD_COMBINE_LIBS=y"
-    opts="$opts CONFIG_RTE_BUILD_SHARED_LIB=y"
-    opts="$opts EXTRA_CFLAGS=\"-fPIC\""
-fi
-
-########################################
-# Disable KNI (DPDK v16.11.3 does not build on CentOS 7.4)
+##  Disable KNI (DPDK v16.11.3 does not build on CentOS 7.4)
 
 ss=""
 ss="${ss}s/^(CONFIG_RTE_KNI_KMOD).*$/\1=n/;"
@@ -239,7 +263,7 @@ ss="${ss}s/^(CONFIG_RTE_LIBRTE_PMD_KNI).*$/\1=n/;"
 sed -r "$ss" -i $RTE_SDK/config/common_linuxapp
 
 ########################################
-# Some bug fix
+##  Some bug fix
 
 sed -r "s/(link.link_speed) = ETH_SPEED_NUM_NONE/\1 = 100000/" \
     -i $RTE_SDK/drivers/net/nfp/nfp_net.c \
@@ -254,11 +278,11 @@ make -C $RTE_SDK config $opts
 ########################################
 ss=""
 ########################################
-for item in $list ; do
+for item in $DPDK_CFG_LIBRTE_LIST ; do
     ss="${ss}s/(CONFIG_RTE_LIBRTE_$item)=.*"'$/\1=y/;'
 done
 ########################################
-# Custom configuration (via DPDK_CUSTOM_CONFIG)
+##  Custom configuration (via DPDK_CUSTOM_CONFIG)
 
 idx=1
 while : ; do
@@ -285,7 +309,7 @@ for cfgfile in ${cfglist[@]} ; do
 done
 
 ########################################
-# Save a copy of the configuration
+##  Save a copy of the configuration
 
 buildconfig="$RTE_SDK/build/build.config"
 
@@ -306,19 +330,42 @@ make -C $RTE_SDK \
 
 ########################################
 
-make -C $RTE_SDK install
+if [ ! -d $DPDK_SETTINGS_DIR ]; then
+    mkdir -p $DPDK_SETTINGS_DIR
+        check_status "failed to create $DPDK_SETTINGS_DIR"
+fi
+
+########################################
+##  Save DPDK settings
+
+cat <<EOF > $conffile
+# Generated on $(date) by $0
+export RTE_SDK="$RTE_SDK"
+export RTE_TARGET="$RTE_TARGET"
+export DPDK_VERSION="$version"
+export DPDK_DEVBIND="$devbind"
+# List of enabled RTE components:
+export DPDK_CFG_LIBRTE_LIST="$DPDK_CFG_LIBRTE_LIST"
+export DPDK_BUILD_TIME="$(date +'%s')"
+export DPDK_CONFIG="$buildconfig"
+export DPDK_IGB_UIO_DRV="$igb_uio_drv_file"
+EOF
+
+########################################
+
+$SUDO make -C $RTE_SDK install
 
     check_status "failed to install DPDK"
 
 ########################################
-# Move the pending build config
+##  Move the pending build config
 
 /bin/mv ${buildconfig}.pending $buildconfig \
     || exit -1
 
 ########################################
 
-depmod -a
+$SUDO depmod -a
 
 ########################################
 
@@ -328,7 +375,7 @@ if [ ! -h $RTE_SDK/$RTE_TARGET ]; then
 fi
 
 ########################################
-# Locate the 'igb_uio' driver
+##  Locate the 'igb_uio' driver
 
 igb_uio_drv_file=$(find $RTE_SDK -type f -name 'igb_uio.ko' \
     | head -1)
@@ -342,28 +389,17 @@ devbind=$(find $RTE_SDK -name 'dpdk-devbind.py' \
     | head -1)
 
 if [ -f "$devbind" ]; then
-    cp -f $devbind /usr/local/bin
+    $SUDO cp -f $devbind /usr/local/bin
 
         check_status "failed to copy dpdk-devbind.py"
 fi
 
 ########################################
-##  Save DPDK settings
 
-cat <<EOF > $conffile
-# Generated on $(date) by $0
-export RTE_SDK="$RTE_SDK"
-export RTE_TARGET="$RTE_TARGET"
-export DPDK_VERSION="$version"
-export DPDK_DEVBIND="$devbind"
-# List of enabled RTE components:
-export DPDK_BUILD_LIST="$list"
-export DPDK_BUILD_TIME="$(date +'%s')"
-export DPDK_CONFIG="$buildconfig"
-export DPDK_IGB_UIO_DRV="$igb_uio_drv_file"
-EOF
+cp -f $conffile $DPDK_SETTINGS_DIR/$pkgname.conf
 
-/bin/cp -f $conffile /etc/$pkgname.conf
+$SUDO cp -f $conffile /etc
+$SUDO cp -f $conffile /etc/$pkgname.conf
 
 ########################################
 

@@ -75,6 +75,12 @@ if [ -f /etc/os-release ]; then
     fi
 fi
 
+if [ "$(whoami)" != "root" ]; then
+    OS_PKG_CMD="sudo $OS_PKG_TOOL"
+else
+    OS_PKG_CMD="$OS_PKG_TOOL"
+fi
+
 ########################################################################
 
 function repository_update () {
@@ -82,7 +88,7 @@ function repository_update () {
       "yum")
         udtagfile="/var/lib/.yum-update-tag-file.txt"
         if [ ! -f "$udtagfile" ]; then
-            $PKGMGR update -y >> $pkgmgrlog 2>&1
+            $OS_PKG_CMD update -y >> $pkgmgrlog 2>&1
             echo "Created by $0 on $(date)" > $udtagfile
         fi
         ;;
@@ -90,10 +96,10 @@ function repository_update () {
         if [ "$PKG_UPDATE_MAX_AGE" != "" ]; then
             if test $(find /var/lib/apt -type d -name 'lists' \
                 -mmin +$PKG_UPDATE_MAX_AGE) ; then
-                apt-get update || exit -1
+                $OS_PKG_CMD update || exit -1
             fi
         else
-            apt-get update || exit -1
+            $OS_PKG_CMD update || exit -1
         fi
         ;;
   esac
@@ -240,10 +246,10 @@ fi
 ########################################################################
 
 if [ "$PKG_LOG_FILE" != "" ]; then
-    exec $OS_PKG_TOOL install -y ${pkglist[@]} \
+    exec $OS_PKG_CMD install -y ${pkglist[@]} \
         > $PKG_LOG_FILE 2>&1
 else
-    exec $OS_PKG_TOOL install -y ${pkglist[@]}
+    exec $OS_PKG_CMD install -y ${pkglist[@]}
 fi
 
 ########################################################################

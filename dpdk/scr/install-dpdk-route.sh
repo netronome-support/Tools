@@ -1,6 +1,20 @@
 #!/bin/bash
 
-url="https://github.com/netronome-support/Tools"
+########################################
+##  Defaults:
+
+: ${NS_TOOLS_GIT_REPO_URL="https://github.com/netronome-support/Tools"}
+
+if [ "$(whoami)" == "root" ]; then
+    # Installation Directory
+    : ${GIT_REPO_BASE_DIR:="/opt/src/netronome-support"}
+
+    # No need for 'sudo'
+    SUDO=""
+else
+    : ${GIT_REPO_BASE_DIR:="$HOME/build/git/netronome-support"}
+    SUDO="sudo"
+fi
 
 ########################################
 
@@ -15,7 +29,7 @@ fi
 function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
-        echo "ERROR: $errmsg"
+        echo "ERROR($(basename $0)): $errmsg"
         exit -1
     fi
 }
@@ -35,17 +49,16 @@ fi
 
 ########################################
 
-nssdir="/opt/src/netronome-support"
-mkdir -p $nssdir
-
-if [ -d $nssdir/Tools ]; then
-    cd $nssdir/Tools
-    git pull \
-        || exit -1
+if [ -d $GIT_REPO_BASE_DIR/Tools ]; then
+    cd $GIT_REPO_BASE_DIR/Tools
+    git pull
+    	check_status "failed to 'git pull' Tools repo"
 else
-    cd $nssdir
-    git clone $url \
-        || exit -1
+    mkdir -p $GIT_REPO_BASE_DIR
+        check_status "failed to create $GIT_REPO_BASE_DIR"
+    cd $GIT_REPO_BASE_DIR
+    git clone $NS_TOOLS_GIT_REPO_URL
+        check_status "failed to clone $NS_TOOLS_GIT_REPO_URL"
 fi
 
 ########################################
@@ -54,16 +67,16 @@ fi
 
 ########################################
 
-rtdir="$nssdir/Tools/dpdk/route"
+rtdir="$GIT_REPO_BASE_DIR/Tools/dpdk/route"
 
 test -d $rtdir
-
     check_status "missing route source code in repository"
 
+make -C $rtdir
+    check_status "failed to 'make' route source code"
 
-make -C $rtdir \
-    || exit -1
+$SUDO cp $rtdir/build/route /usr/local/bin/dpdk-route
 
-cp $rtdir/build/route /usr/local/bin/dpdk-route
+########################################
 
 exit 0
