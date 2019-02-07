@@ -1,18 +1,36 @@
 #!/bin/bash
 
-GREEN='\033[0;32m'
-NC='\033[0m'
-RED='\033[0;31m'
+############################################################
 
+function usage() {
+cat <<EOF
+Usage $(basename $0) [options] <package file>|<version>
+Options:
+  --help -h                   Show this help
+  --allow-kernel-upgrade      Allow kernel upgrade if needed
+  --allow-reboot              Allow reboot if needed
+  --force-kernel-upgrade      Upgrade kernel even if not needed
+EOF
+}
+
+############################################################
+param=""
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
             "--help"|"-h")
-                echo "Usage: <package file>|<version>"
+                usage
                 exit 0
                 ;;
             "--verbose"|"-v")   optVerbose="yes" ;;
             "--reinstall")      REINSTALL="yes" ;;
+            "--allow-kernel-upgrade")
+                                optAllowKernelUpgrade="yes" ;;
+            "--allow-reboot")   optAllowReboot="yes" ;;
+            "--force-kernel-upgrade")
+                                optForceKernelUpgrade="yes"
+                                optAllowKernelUpgrade="yes"
+                                ;;
             "--version")        param="version" ;;
         *)
             if [ -f "$arg" ]; then
@@ -70,7 +88,16 @@ function check_version () {
     done
     return 0
 }
-
+############################################################
+# Note: the tool below is part of the 'Tools' repo:
+#   https://github.com/netronome-support/Tools
+which install-packages.sh > /dev/null
+    check_status "please install 'install-packages.sh'"
+############################################################
+pkglist=()
+pkglist+=( "wget@" "git@" "curl@" )
+install-packages.sh ${pkglist[@]} \
+    || exit -1
 ############################################################
 function download () {
     local dldir="$1"
@@ -82,7 +109,7 @@ function download () {
     mkdir -p $dldir/pending
         check_status "failed to make directory $dldir"
     echo " - Download $url"
-    wget --continue "$url" -O "$dldir/pending/$fname"
+    wget --quiet --continue "$url" -O "$dldir/pending/$fname"
         check_status "failed to download $url ($fname)"
     mv $dldir/pending/$fname $dldir/$fname
         check_status "failed to move downloaded file"
@@ -97,40 +124,47 @@ test -f /etc/os-release
 . /etc/os-release
 
 test "$ID" == "fedora"
-    check_status "This installation script requires Fedora"
+    check_status "this installation script requires Fedora"
 
 test $VERSION_ID -ge 28
-    check_status "This installation script requires at least Fedora 28"
+    check_status "this installation script requires at least Fedora 28"
 
 check_version 2 "#.#" "$(uname -r)" "4.18"
     update_kernel=$?
 
-if [ $update_kernel == 0 ]; then
-    echo -e "${GREEN}OS Version and Kernel Version is sufficient${NC}"
-fi
-
 ############################################################
-while [ $update_kernel == 1 ]; do
-    echo -e "${RED}The Linux Kernel must be at least 4.18${NC}"
-    read -p "Do you wish to update the Kernel? System will reboot after update. Please run this script again after reboot. (y/n)?" yn
-    case $yn in
-        [Yy]* )
-        echo "Kernel will now be updated..."
-        curl -s https://repos.fedorapeople.org/repos/thl/kernel-vanilla.repo | sudo tee /etc/yum.repos.d/kernel-vanilla.repo
-        yum install kernel-devel -y
+
+if [ $update_kernel == 1 ] || [ "$optForceKernelUpgrade" != "" ]; then
+    if [ "$optAllowKernelUpgrade" != "" ]; then
+        echo " - Upgrading the Kernel"
+        url="https://repos.fedorapeople.org"
+        url="$url/repos/thl/kernel-vanilla.repo"
+        curl -s $url > /etc/yum.repos.d/kernel-vanilla.repo
+            check_status "failed to access $url"
+        yum install -y kernel-devel
+            check_status "failed to install 'kernel-devel'"
         dnf --enablerepo=kernel-vanilla-stable update -y
             check_status "failed to upgrade kernel"
-        reboot;
-        break;;
-        [Nn]* ) echo "Exiting setup"; exit;;
-        * ) echo "Please answer (y/n).";;
-    esac
-done  
+        if [ "$optAllowReboot" != "" ]; then
+            printf "\n\n - REBOOTING SYSTEM\n\n"
+            sleep 1
+            reboot
+        else
+            echo "NOTICE: system needs to be rebooted"
+            exit -1
+        fi
+    else
+        echo "ERROR: kernel needs to be upgraded"
+        echo " - please re-run installation script with the following options added"
+        echo "    --allow-kernel-upgrade --allow-reboot"
+        exit -1
+    fi
+fi
 
 ############################################################
 
 pkglist=()
-pkglist+=( "wget@" "make@" "gcc@" "bc@" "bison@" "flex@" "git@" )
+pkglist+=( "make@" "gcc@" "bc@" "bison@" "flex@" )
 pkglist+=( "ethtool@" )
 pkglist+=( "clang@" "pkg-config@" )
 pkglist+=( "llc@llvm" )
@@ -143,8 +177,7 @@ pkglist+=( "/usr/include/libmnl/libmnl.h@libmnl-devel" )
 pkglist+=( "/usr/include/ncurses.h@ncurses-devel" )
 pkglist+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
 
-script_full_path=$(dirname "$0")
-$script_full_path'/install-packages.sh' ${pkglist[@]} \
+install-packages.sh ${pkglist[@]} \
     || exit -1
 
 ############################################################
@@ -182,23 +215,26 @@ if [ -d "$nfp_drv_dir" ]; then
         fi
     fi
 fi
-
 ############################################################
-upgrade=NO
-check_version 4 "#.#.#.#" "$nfd_version" "0.0.3.5" || upgrade=YES
-if [ ${fw_version:0:3} == ${fw_version_required:0:3} ]; then
-    check_version 4 "bpf-#.#.#.#" "$fw_version" "$fw_version_required" || upgrade=YES
+if ! check_version 4 "#.#.#.#" "$nfd_version" "0.0.3.5" ; then
+    fw_upgrade=YES
+elif [ "${fw_version:0:3}" != "${fw_version_required:0:3}" ]; then
+    fw_upgrade=YES
+elif ! check_version 4 "bpf-#.#.#.#" "$fw_version" "$fw_version_required" ; then
+    fw_upgrade=YES
+elif [ "$fw_app_name" != "ebpf" ]; then
+    fw_upgrade=YES
 else
-    upgrade=YES
-fi
-if [ "$upgrade" == "NO" ] && [ "$fw_app_name" == "ebpf" ]; then
-    echo -e "${GREEN}DONE($fw_version already installed)${NC}"
-    echo -e "${GREEN}eBPF Offload setup for Agilio SmartNIC is complete${NC}"
+    echo "DONE($fw_version already installed)"
+    echo "eBPF Offload setup for Agilio SmartNIC is complete"
     exit 0
 fi
 ############################################################
 if [ "$pkgfile" == "" ]; then
-    attchid="36012574800" ; r_pkgvers="2.0.6.121-1"
+    # Apologies: This link keeps on changing.
+    # Please visit the help.netronome.com eBPF page for an
+    # updated attachment ID.
+    attchid="36020216437" ; r_pkgvers="2.0.6.124-1"
 
     echo " - Install Agilio BPF Firmware"
     pkgfname="agilio-bpf-firmware-$r_pkgvers.noarch.rpm"
