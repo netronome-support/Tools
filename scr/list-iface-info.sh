@@ -37,6 +37,8 @@ for ifname in $list ; do
         | sed -rn 's/^.*driver:\s*(\S+)@.*$/\1/p')
     businfo=$(echo $info \
         | sed -rn 's/^.*@bus-info: ([^@]*)@.*$/\1/p')
+    s_ifname=""
+    desc=""
     if [[ "$businfo" =~ $re_nfp_vf ]]; then
         idx=$(echo $businfo \
             | sed -rn 's/^.*\sVF.\.([0-9]+)\s.*$/\1/p')
@@ -69,6 +71,13 @@ for ifname in $list ; do
                 idx=${phys_port#*vf}
                 printf -v s_ifname "d-vf-%02u" $idx
                 printf -v desc "VF %2u REPR" $idx
+            elif [ "$phys_port" == "" ]; then
+                re_nfp_p_ifname='^nfp_p[0-9]$'
+                if [[ "$ifname" =~ $re_nfp_p_ifname ]]; then
+                    idx=${ifname#nfp_p}
+                    printf -v s_ifname "b-p-%02u" $idx
+                    printf -v desc "P  %2u" $idx
+                fi
             fi
         fi
     fi
