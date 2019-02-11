@@ -28,6 +28,8 @@ for arg in "$@" ; do
         echo "  --eth-801q-vid <integer>"
         echo "  --nfp-vf-index <integer>"
         echo "  --nfp-vf-repr <ifname>"
+        echo "  --ovs-br-name <ifname>"
+        echo "  --ovs-port-name <ifname>"
         echo "  --xvio-socket <socket file>"
         echo "  --queues <integer>"
         exit
@@ -40,6 +42,8 @@ for arg in "$@" ; do
       "--eth-801q-vid")         param="$arg" ;;
       "--nfp-vf-index")         param="$arg" ;;
       "--nfp-vf-repr")          param="$arg" ;;
+      "--ovs-br-name")          param="$arg" ;;
+      "--ovs-port-name")        param="$arg" ;;
       "--xvio-socket")          param="$arg" ;;
       "--queues")               param="$arg" ;;
       *)
@@ -57,6 +61,8 @@ for arg in "$@" ; do
       "--eth-801q-vid")         eth_801q_vid="$arg" ;;
       "--nfp-vf-index")         nfp_vf_index="$arg" ;;
       "--nfp-vf-repr")          nfp_vf_repr_iface="$arg" ;;
+      "--ovs-br-name")          ovs_br_name="$arg" ;;
+      "--ovs-port-name")        ovs_port_name="$arg" ;;
       "--xvio-socket")          xvio_socket="$arg" ;;
       "--queues")               queues="$arg" ;;
     esac
@@ -140,15 +146,19 @@ case $type in
     require_pci_addr=YES
     pci_dev_driver="vfio-pci"
     ;;
-  "bridge")
+  "bridge"|"ovs"|"OVS")
+    test "$ovs_br_name" != ""
+        check_status "OVS bridge name required for 'bridge' device"
     devtype="interface"
     devopts="type='bridge'"
-    bridx=$(echo "$brname" | tr -d '[:alpha:]' | tr -d '-')
-    vmidx=$(echo "$vmname" | tr -d '[:alpha:]' | tr -d '-')
-    ifname="port-$bridx-$vmidx"
-    xml="$xml <source bridge='$brname'/>"
+    if [ "$ovs_port_name" == "" ]; then
+        bridx=$(echo "$ovs_br_name" | tr -d '[:alpha:]' | tr -d '-')
+        vmidx=$(echo "$vmname"      | tr -d '[:alpha:]' | tr -d '-')
+        ovs_port_name="port-$bridx-$vmidx"
+    fi
+    xml="$xml <source bridge='$ovs_br_name'/>"
     xml="$xml <virtualport type='openvswitch'/>"
-    xml="$xml <target dev='$ifname'/>"
+    xml="$xml <target dev='$ovs_port_name'/>"
     xml="$xml <model type='virtio'/>"
     ;;
   *)
@@ -166,7 +176,7 @@ if [ "$require_pci_addr" != "" ] && [ "$pci_addr" == "" ]; then
         $(( 8 + nfp_vf_index / 8 )) \
         $(( nfp_vf_index % 8 ))
     # Attach the appropriate device driver
-    which set-device-driver.sh
+    which set-device-driver.sh > /dev/null 2>&1
         check_status "missing script 'set-device-driver.sh'"
     set-device-driver.sh --driver "$pci_dev_driver" "$pci_addr" \
         || exit -1

@@ -1,6 +1,10 @@
 #!/bin/bash
 
 ########################################################################
+if [ "$1" == "--from-source" ]; then
+    mode='source'
+fi
+########################################################################
 
 # NUMA Socket to run virtio-forwarder on
 : ${VIO_SOCKET:=0}
@@ -10,6 +14,12 @@
 
 # Number of cores to use for virtio-forwarder
 : ${VIO_CORE_COUNT:=2}
+
+: ${VIO_GIT_REPO_URL:=https://github.com/Netronome/virtio-forwarder}
+
+: ${VIO_GIT_BASE_DIR:=/opt/src}
+
+: ${VIO_DPDK_VERSION:=17.11}
 
 ########################################################################
 
@@ -32,31 +42,82 @@ fi
 ########################################################################
 if [ -f /etc/os-release ]; then
     . /etc/os-release
-    if [ "$ID" == "ubuntu" ] && [ ${VERSION_ID%.*} -lt 18 ]; then
-        echo "ERROR: preperably only use Ubuntu 18.04 or later"
-        echo " - the DPDK version might be too old"
-        exit -1
+    if [ "$ID" == "ubuntu" ]; then
+        if [ ${VERSION_ID%.*} -lt 18 ]; then
+            mode='source'
+        fi
+    fi
+    if [ "$mode" == "" ]; then
+        case "$ID" in
+          "ubuntu"|"debian") mode='ubuntu' ;;
+          "centos"|"rhel"|"fedora") mode='fedora' ;;
+        esac
     fi
 fi
 ########################################################################
 
 pkgs=()
-pkgs+=( "add-apt-repository@ubuntu:software-properties-common" )
 # RHEL & CentOS:
-pkgs+=( "semanage@fedora:policycoreutils-python" )
+
+case "$mode" in
+  'ubuntu')
+    pkgs+=( "add-apt-repository@ubuntu:software-properties-common" )
+    ;;
+  'fedora')
+    pkgs+=( "semanage@fedora:policycoreutils-python" )
+    pkgs+=( "yum-plugin-copr" )
+    ;;
+  'source')
+    sphinx_file="/usr/lib/python2.7/dist-packages/sphinx/__main__.py"
+    pkgs+=( "$sphinx_file@python-sphinx" )
+    pkgs+=( "/usr/share/doc/python-zmq@python-zmq" )
+    ;;
+  *)
+    false ; check_status "unsupported system"
+esac
 
 install-packages.sh ${pkgs[@]} \
     || exit -1
 
 ########################################################################
 
-add-apt-repository -y ppa:netronome/virtio-forwarder
-    check_status "failed to add repository 'ppa:netronome/virtio-forwarder'"
-apt-get update
-    check_status "failed to 'apt-get update'"
-apt-get install -y virtio-forwarder
-    check_status "failed to install virtio-forwarder"
+case "$mode" in
+  'ubuntu')
+    add-apt-repository -y ppa:netronome/virtio-forwarder
+        check_status "failed to add repository 'ppa:netronome/virtio-forwarder'"
+    apt-get update
+        check_status "failed to 'apt-get update'"
+    apt-get install -y virtio-forwarder
+        check_status "failed to install virtio-forwarder"
+    ;;
+  'fedora')
+    yum copr enable netronome/virtio-forwarder
+        check_status "failed to enable Netronome repository"
+    yum install -y virtio-forwarder
+        check_status "failed to install virtio-forwarder"
+    ;;
+  'source')
+    # First, install DPDK
+    install-dpdk.sh $VIO_DPDK_VERSION \
+        || exit -1
+    # The installation above should leave all settings in:
+    . /etc/dpdk-$VIO_DPDK_VERSION.conf
 
+    mkdir -p $VIO_GIT_BASE_DIR
+    if [ -d $VIO_GIT_BASE_DIR/virtio-forwarder ]; then
+        git -C $VIO_GIT_BASE_DIR/virtio-forwarder pull
+            check_status "failed to update (pull) git repository"
+    else
+        git -C $VIO_GIT_BASE_DIR clone $VIO_GIT_REPO_URL
+            check_status "failed to clone $VIO_GIT_REPO_URL"
+    fi
+    make -C $VIO_GIT_BASE_DIR/virtio-forwarder
+        check_status "failed to build virtio-forwarder"
+    make -C $VIO_GIT_BASE_DIR/virtio-forwarder install
+        check_status "failed to install virtio-forwarder"
+    ;;
+esac
+    
 ########################################################################
 
 cpuset=$(list-socket-vcpus.sh \
