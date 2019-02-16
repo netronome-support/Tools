@@ -18,11 +18,13 @@ for arg in "$@" ; do
   if [ "$param" == "" ]; then
     case "$arg" in
       "--help"|"-h")
-        echo "Start VM(s)"
-        echo "  --help -h"
-        echo "  --verbose -v"
+        echo "Attach device/interface to VM"
+        echo "Syntax: $(basename $0) [<options>]"
+        echo "Mandatory:"
         echo "  --vm-name <name>"
         echo "  --type xvio|sr-iov|hostdev|bridge"
+        echo "Options:"
+        echo "  --help -h"
         echo "  --hw-addr <MAC address>"
         echo "  --pci-addr <PCI address>"
         echo "  --eth-801q-vid <integer>"

@@ -57,19 +57,19 @@ fi
 ########################################################################
 
 pkgs=()
-# RHEL & CentOS:
+pkgs+=( "git" )
 
 case "$mode" in
-  'ubuntu')
+  'ubuntu') # Repository Install
     pkgs+=( "add-apt-repository@ubuntu:software-properties-common" )
     ;;
-  'fedora')
+  'fedora') # Repository Install
     pkgs+=( "semanage@fedora:policycoreutils-python" )
     pkgs+=( "yum-plugin-copr" )
     ;;
   'source')
     sphinx_file="/usr/lib/python2.7/dist-packages/sphinx/__main__.py"
-    pkgs+=( "$sphinx_file@python-sphinx" )
+    pkgs+=( "$sphinx_file@ubuntu:python-sphinx" )
     pkgs+=( "/usr/share/doc/python-zmq@python-zmq" )
     ;;
   *)
@@ -91,7 +91,7 @@ case "$mode" in
         check_status "failed to install virtio-forwarder"
     ;;
   'fedora')
-    yum copr enable netronome/virtio-forwarder
+    yum copr enable -y netronome/virtio-forwarder
         check_status "failed to enable Netronome repository"
     yum install -y virtio-forwarder
         check_status "failed to install virtio-forwarder"
@@ -105,11 +105,15 @@ case "$mode" in
 
     mkdir -p $VIO_GIT_BASE_DIR
     if [ -d $VIO_GIT_BASE_DIR/virtio-forwarder ]; then
-        git -C $VIO_GIT_BASE_DIR/virtio-forwarder pull
-            check_status "failed to update (pull) git repository"
+        {   cd $VIO_GIT_BASE_DIR/virtio-forwarder
+            git pull
+                check_status "failed to update (pull) git repository"
+        }
     else
-        git -C $VIO_GIT_BASE_DIR clone $VIO_GIT_REPO_URL
-            check_status "failed to clone $VIO_GIT_REPO_URL"
+        {   cd $VIO_GIT_BASE_DIR
+            git clone $VIO_GIT_REPO_URL
+                check_status "failed to clone $VIO_GIT_REPO_URL"
+        }
     fi
     make -C $VIO_GIT_BASE_DIR/virtio-forwarder
         check_status "failed to build virtio-forwarder"

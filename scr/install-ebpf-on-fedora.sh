@@ -169,6 +169,7 @@ pkglist+=( "ethtool@" )
 pkglist+=( "clang@" "pkg-config@" )
 pkglist+=( "llc@llvm" )
 pkglist+=( "bpftool@" )
+pkglist+=( "ethtool@" )
 
 pkglist+=( "/usr/src/kernels/$(uname -r)/Makefile@kernel-devel" )
 pkglist+=( "/usr/include/bfd.h@binutils-devel" )

@@ -174,7 +174,9 @@ function sample () {
         "$name/ovs-ctl-status-troubleshoot.txt"
     if [ "$(pgrep virtiorelayd)" != "" ]; then
         run "/opt/netronome/bin/virtio_relay_stats" "" \
-            "$name/nfp-virtio-stats.txt"
+            "$name/virtio-relay-stats.txt"
+        run "/usr/lib/virtio-forwarder/virtioforwarder_stats.py" "" \
+            "$name/virtio-forwarder-stats.txt"
     fi
 
     # Contrail vRouter Statistics

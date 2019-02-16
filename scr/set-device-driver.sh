@@ -16,6 +16,7 @@ Options:
   --driver -d <name>            Specify driver
   --nfp-vf-idx -i <idx>         Specify NFP VF by index
   --nfp-vf-idx -i <start>-<end> Specify a range of NFP VFs
+  --pci-if-idx <index>          Specify interface index from lspci list
 
 EOF
 }
@@ -43,7 +44,8 @@ re_pci_1="^${xd}{2}:${xd}{2}\.[0-7]\$"
 ########################################################################
 param=""
 devlist=()
-idxlist=()
+vf_idx_list=()
+pci_if_list=()
 
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
@@ -51,7 +53,8 @@ for arg in "$@" ; do
           "--help"|"-h") usage ;;
           "--verbose")          optVerbose="yes" ;;
           "--driver"|"-d")      param="driver" ;;
-          "--nfp-vf-idx"|"-i")  param="index" ;;
+          "--nfp-vf-idx"|"-i")  param="vf-index" ;;
+          "--pci-if-idx")       param="if-index" ;;
           "--verify")           optVerify="yes" ;;
           *)
             if   [[ "$arg" =~ $re_pci_0 ]]; then
@@ -66,7 +69,8 @@ for arg in "$@" ; do
     else
         case "$param" in
           "driver")             driver="$arg" ;;
-          "index")              idxlist+=( "$arg" ) ;;
+          "vf-index")           vf_idx_list+=( "$arg" ) ;;
+          "if-index")           pci_if_list+=( "$arg" ) ;;
         esac
     param=""
     fi
@@ -101,12 +105,15 @@ test "$driver" != ""
     check_status "no driver specified"
 
 if [ "$driver" != "none" ]; then
-    if [ ! -d "/sys/bus/pci/drivers/$driver" ]; then
+    drvdir="/sys/bus/pci/drivers/$driver"
+    if [ ! -d "$drvdir" ]; then
         verbose "running 'modprobe' on $driver"
         modprobe $driver > /dev/null 2>&1
             check_status "could not 'modprobe' driver '$driver'"
     fi
-    bindfile="/sys/bus/pci/drivers/$driver/bind"
+    test -d "$drvdir"
+        check_status "no such driver '$driver'"
+    bindfile="$drvdir/bind"
     test -w $bindfile
         check_status "access denied to $bindfile"
     # Used to identify the driver of a PCI device
@@ -122,14 +129,14 @@ function add_nfp_vf_idx () {
     devlist+=( "$pci_bdf" )
 }
 ########################################################################
-if [ ${#idxlist[@]} -gt 0 ]; then
+if [ ${#vf_idx_list[@]} -gt 0 ]; then
     nfpbus=$(lspci -d 19ee: \
         | head -1 \
         | cut -d ' ' -f 1 \
         | cut -d ':' -f 1 )
     test "$nfpbus" != ""
         check_status "could not identify an NFP in the system"
-    for nfpidx in ${idxlist[@]} ; do
+    for nfpidx in ${vf_idx_list[@]} ; do
         if [[ "$nfpidx" =~ $re_integer ]]; then
             test $nfpidx -lt 60
                 check_status "NFP VF index '$nfpidx' is out or range"
@@ -145,6 +152,17 @@ if [ ${#idxlist[@]} -gt 0 ]; then
         else
             false ; check_status "illegal index format ($nfpidx)"
         fi
+    done
+fi
+########################################################################
+if [ ${#pci_if_list[@]} -gt 0 ]; then
+    pci_eth_dev_list=( $(lspci \
+        | grep 'Ethernet controller' \
+        | cut -d ' ' -f 1) )
+    for idx in ${pci_if_list[@]} ; do
+        test "${pci_eth_dev_list[$idx]}" != ""
+            check_status "no PCI Ethernet interface with index $idx"
+        devlist+=( "0000:${pci_eth_dev_list[$idx]}" )
     done
 fi
 ########################################################################
@@ -171,6 +189,8 @@ for pcibdf in ${devlist[@]} ; do
         orfile="$devdir/driver_override"
         test -w $orfile
             check_status "access denied to $orfile"
+        test -w $bindfile
+            check_status "can not bind $pcibdf to $driver"
         echo "$driver" > $orfile
         echo "$pcibdf" > $bindfile
     fi
@@ -182,4 +202,3 @@ if [ "$optVerify" != "" ] && [ ${#faillist[@]} -gt 0 ]; then
 fi
 ########################################################################
 exit 0
-

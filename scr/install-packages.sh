@@ -246,10 +246,22 @@ fi
 ########################################################################
 
 if [ "$PKG_LOG_FILE" != "" ]; then
-    exec $OS_PKG_CMD install -y ${pkglist[@]} \
-        > $PKG_LOG_FILE 2>&1
+    $OS_PKG_CMD install -y ${pkglist[@]} \
+        > $PKG_LOG_FILE 2>&1 \
+        || exit -1
 else
-    exec $OS_PKG_CMD install -y ${pkglist[@]}
+    $OS_PKG_CMD install -y ${pkglist[@]} \
+        || exit -1
 fi
 
 ########################################################################
+# The return code from yum is 0 (success) even if it failed to install a
+# package. This is obviously not good. Here's a work-around:
+if [ "$OS_PKG_ARCH" == "rpm" ]; then
+    non_installed_list=$(rpm --query --queryformat "" ${pkglist[@]})
+    if [ "$non_installed_list" != "" ]; then
+        exit -1
+    fi
+fi
+########################################################################
+exit 0

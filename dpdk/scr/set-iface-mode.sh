@@ -38,9 +38,6 @@ function check_status () {
 ########################################################################
 ##  Check for all required tools
 
-which dpdk-devbind > /dev/null 2>&1
-    check_status "missing tool 'dpdk-devbind'"
-
 pkgs=()
 pkgs+=( "lspci@pciutils" )
 pkgs+=( "ifconfig@net-tools" )
@@ -115,8 +112,6 @@ fi
 case "$mode" in
   "dpdk")
     b_driver="igb_uio"
-    grep hugetlbfs /proc/mounts > /dev/null \
-        || mount /mnt/huge
     ;;
   "netdev")
     ;;
@@ -128,21 +123,9 @@ case "$mode" in
     exit -1
 esac
 
-# Always load 'igb_uio' for dpdk-devbind
-modprobe igb_uio \
-    || exit -1
-
-if [ "$p_driver" != "" ]; then
+if [ "$p_driver" != "" ] && [ "$p_driver" != "$b_driver" ]; then
     modprobe $p_driver
         check_status "'modprobe $p_driver' failed"
 fi
 
-c_driver=$(dpdk-devbind --status \
-    | sed -rn "s/^\S*$bdf"' .* drv=(\S+).*$/\1/p')
-
-if [ "$c_driver" != "$b_driver" ]; then
-    dpdk-devbind --bind $b_driver $bdf
-        check_status "failed to bind $b_driver to $bdf"
-fi
-
-exit 0
+exec set-device-driver.sh --driver $b_driver $bdf

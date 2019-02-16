@@ -7,8 +7,15 @@
 : ${DPDK_CFG_LIBRTE_LIST:="NFP_PMD"}
 # MLX4_PMD MLX5_PMD
 
-# Compile Target Architecture for DPDK
-: ${RTE_TARGET:="x86_64-native-linuxapp-gcc"}
+# To explicitly set RTE_TARGET, FORCE_RTE_TARGET must be set
+if [ "$FORCE_RTE_TARGET" != "" ]; then
+    RTE_TARGET="$FORCE_RTE_TARGET"
+else
+    RTE_TARGET="x86_64-native-linuxapp-gcc"
+fi
+# On some systems RTE_TARGET is already set to
+# 'x86_64-default-linuxapp-gcc' but at lease dpdk-17.11
+# will not compile with this.
 
 # DPDK Web Site
 : ${DPDK_DOWNLOAD_URL:="https://fast.dpdk.org/rel"}
@@ -269,6 +276,10 @@ sed -r "s/(link.link_speed) = ETH_SPEED_NUM_NONE/\1 = 100000/" \
     -i $RTE_SDK/drivers/net/nfp/nfp_net.c \
     || exit -1
 
+sed -r 's/^(CONFIG_RTE_MAX_ETHPORTS)=.*$/\1=64/' \
+    -i $RTE_SDK/config/common_base \
+    || exit -1
+
 ########################################
 
 make -C $RTE_SDK config $opts
@@ -398,8 +409,10 @@ fi
 
 cp -f $conffile $DPDK_SETTINGS_DIR/$pkgname.conf
 
-$SUDO cp -f $conffile /etc
-$SUDO cp -f $conffile /etc/$pkgname.conf
+if [ "$DPDK_SETTINGS_DIR" != "/etc" ]; then
+    $SUDO cp -f $conffile /etc
+    $SUDO cp -f $conffile /etc/$pkgname.conf
+fi
 
 ########################################
 
