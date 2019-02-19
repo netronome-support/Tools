@@ -32,6 +32,7 @@ for arg in "$@" ; do
         echo "  --nfp-vf-repr <ifname>"
         echo "  --ovs-br-name <ifname>"
         echo "  --ovs-port-name <ifname>"
+        echo "  --guest-pci-slot <index>"
         echo "  --xvio-socket <socket file>"
         echo "  --queues <integer>"
         exit
@@ -46,6 +47,7 @@ for arg in "$@" ; do
       "--nfp-vf-repr")          param="$arg" ;;
       "--ovs-br-name")          param="$arg" ;;
       "--ovs-port-name")        param="$arg" ;;
+      "--guest-pci-slot")       param="$arg" ;;
       "--xvio-socket")          param="$arg" ;;
       "--queues")               param="$arg" ;;
       *)
@@ -65,6 +67,7 @@ for arg in "$@" ; do
       "--nfp-vf-repr")          nfp_vf_repr_iface="$arg" ;;
       "--ovs-br-name")          ovs_br_name="$arg" ;;
       "--ovs-port-name")        ovs_port_name="$arg" ;;
+      "--guest-pci-slot")       guest_pci_slot="$arg" ;;
       "--xvio-socket")          xvio_socket="$arg" ;;
       "--queues")               queues="$arg" ;;
     esac
@@ -190,6 +193,13 @@ if [ "$hw_addr" != "" ]; then
     [[ "$hw_addr" =~ $re_hwaddr ]]
         check_status "could not parse HW address '$hw_addr'"
     xml="$xml <mac address='$hw_addr'/>"
+fi
+########################################
+if [ "$guest_pci_slot" != "" ]; then
+    [[ "$guest_pci_slot" =~ $re_integer ]]
+        check_status "could not parse guest PCI bus number '$guest_pci_slot'"
+    printf -v slot_hex "0x%02x" $guest_pci_slot
+    xml="$xml <address type='pci' bus='0x00' slot='$slot_hex' function='0'/>"
 fi
 ########################################
 if [ "$queues" != "" ]; then
