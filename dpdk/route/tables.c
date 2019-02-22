@@ -15,7 +15,7 @@ static sem_t rt_dt_lock;
 
 void
 rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
-    rt_lpm_t *rt, uint8_t flags)
+    rt_lpm_t *rt, rt_ipv4_ar_t *ar, uint8_t flags)
 {
     assert(rt != NULL);
     rt_port_info_t *pi = rt->pi;
@@ -50,7 +50,9 @@ rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
     np->port    = pi->idx;
     np->flags   = flags;
     np->tx_buffer = pi->tx_buffer;
-    np->eth.dst = &rt->hwaddr;
+    if (ar != NULL) {
+        memcpy(&np->eth.dst, ar->hwaddr, 6);
+    }
     memcpy(&np->eth.src, &pi->hwaddr, 6);
     /* Copy the IP address last */
     np->rdidx = rdidx;
@@ -90,7 +92,7 @@ rt_dt_sprintf (char *str, const rt_dt_route_t *dt)
     char ts1[32], ts2[32];
     n += sprintf(&str[n], "(%u) %s - P: %u D: %s", dt->rdidx,
         rt_ipaddr_str(ts1, dt->ipaddr), dt->port,
-        rt_hwaddr_str(ts2, *dt->eth.dst));
+        rt_hwaddr_str(ts2, dt->eth.dst));
     n += sprintf(&str[n], " S: %s", rt_hwaddr_str(ts1, dt->eth.src));
     return n;
 }
@@ -115,7 +117,6 @@ rt_dt_dump (FILE *fd)
     fflush(fd);
 
 }
-
 
 /**********************************************************************/
 /*  Route Table (LPM)  */
@@ -325,6 +326,8 @@ rt_lpm_gen_icmp_requests (void)
 /**********************************************************************/
 /*  Address Resolution Table */
 
+static sem_t rt_ipv4_ar_lock;
+
 static rt_ipv4_ar_t rt_ipv4_ar_table[RT_IPV4_AR_TABLE_SIZE];
 
 static inline int rt_ipv4_art_hash (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr)
@@ -334,10 +337,13 @@ static inline int rt_ipv4_art_hash (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr)
 
 void rt_ar_table_init (void)
 {
+    int rc = sem_init(&rt_ipv4_ar_lock, 1, 1);
+    assert(rc == 0);
     int idx;
     for (idx = 0 ; idx < RT_IPV4_AR_TABLE_SIZE ; idx++)
     {
         rt_ipv4_ar_t *p = &rt_ipv4_ar_table[idx];
+        memset(p, 0, sizeof(rt_ipv4_ar_t));
         p->pi = NULL;
         p->prev = p->next = p;
     }
@@ -358,14 +364,77 @@ rt_ipv4_ar_lookup (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr)
     return NULL;
 }
 
-rt_eth_addr_t *
-rt_ipv4_ar_get_eth_addr (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr)
+rt_ipv4_ar_t *rt_ipv4_ar_find_or_create (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr)
 {
-    rt_ipv4_ar_t *sp = rt_ipv4_ar_lookup(pi, ipaddr);
-    if (sp != NULL) {
-        return &sp->hwaddr;
+    /* Allocate new entry (just in case) */
+    rt_ipv4_ar_t *ap = (rt_ipv4_ar_t *) malloc(sizeof(rt_ipv4_ar_t));
+    assert(ap != NULL);
+    memset(ap, 0, sizeof(rt_ipv4_ar_t));
+
+    int idx = rt_ipv4_art_hash(pi, ipaddr);
+    rt_ipv4_ar_t *hd = &rt_ipv4_ar_table[idx];
+    rt_ipv4_ar_t *sp;
+
+    sem_wait(&rt_ipv4_ar_lock);
+    for (sp = hd ; ; sp = sp->next) {
+        if ((sp->pi == pi) && (sp->ipaddr == ipaddr))
+            break;
+        if (sp->next == hd) {
+            if (hd->pi == NULL) {
+                sp = hd;
+            } else {
+                /* Insert 'ap' at end of list */
+                ap->next = hd;
+                ap->prev = hd->prev;
+                hd->prev->next = ap;
+                hd->prev = ap;
+                sp = ap;
+                ap = NULL;
+            }
+            sp->pi = pi;
+            sp->ipaddr = ipaddr;
+            sp->flags = 0;
+            break;
+        }
     }
-    return NULL;
+    sem_post(&rt_ipv4_ar_lock);
+
+
+    /* If the ap was not used (ap != NULL), then relase it */
+    free(ap);
+
+    return sp;
+}
+
+int rt_ipv4_ar_get_pkt (rt_pkt_t *pkt, rt_ipv4_ar_t *ar)
+{
+    if (ar == NULL)
+        return 0;
+    int got_pkt = 0;
+    sem_wait(&rt_ipv4_ar_lock);
+    if (ar->flags & RT_AR_F_HAS_PKT) {
+        memcpy(pkt, &ar->pkt, sizeof(rt_pkt_t));
+        ar->flags &= ~RT_AR_F_HAS_PKT;
+        memset(&ar->pkt, 0, sizeof(rt_pkt_t));
+        got_pkt = 1;
+    }
+    sem_post(&rt_ipv4_ar_lock);
+    return got_pkt;
+}
+
+int rt_ipv4_ar_set_pkt (rt_pkt_t pkt, rt_ipv4_ar_t *ar)
+{
+    if (ar == NULL)
+        return 0;
+    int added_pkt = 0;
+    sem_wait(&rt_ipv4_ar_lock);
+    if ((ar->flags & RT_AR_F_HAS_PKT) == 0) {
+        memcpy(&ar->pkt, &pkt, sizeof(rt_pkt_t));
+        ar->flags |= RT_AR_F_HAS_PKT;
+        added_pkt = 1;
+    }
+    sem_post(&rt_ipv4_ar_lock);
+    return added_pkt;
 }
 
 rt_ipv4_ar_t *rt_ipv4_ar_learn (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
@@ -374,34 +443,18 @@ rt_ipv4_ar_t *rt_ipv4_ar_learn (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
     char ts0[32], ts1[32];
     dbgmsg(INFO, nopkt, "Learned Address (port %u) %s: %s",
         pi->idx, rt_ipaddr_str(ts0, ipaddr), rt_hwaddr_str(ts1, hwaddr));
-    rt_ipv4_ar_t *sp = rt_ipv4_ar_lookup(pi, ipaddr);
-    if (sp != NULL) {
-        memcpy(sp->hwaddr, hwaddr, sizeof(rt_eth_addr_t));
-        return sp;
-    }
-    int idx = rt_ipv4_art_hash(pi, ipaddr);
-    rt_ipv4_ar_t *hd = &rt_ipv4_ar_table[idx];
-    rt_ipv4_ar_t *np;
-    if (hd->pi == NULL) {
-        /* 'head' entry is available */
-        np = hd;
-    } else {
-        /* Allocate new entry */
-        np = (rt_ipv4_ar_t *) malloc(sizeof(rt_ipv4_ar_t));
-        assert(np != NULL);
-    }
-    /* Populate Entry */
-    np->pi = pi;
-    np->ipaddr = ipaddr;
-    memcpy(hd->hwaddr, hwaddr, sizeof(rt_eth_addr_t));
-    if (np != hd) {
-        /* Insert new entry */
-        np->next = hd;
-        np->prev = hd->prev;
-        hd->prev->next = np;
-        hd->prev = np;
-    }
-    return np;
+
+    rt_ipv4_ar_t *sp = rt_ipv4_ar_find_or_create(pi, ipaddr);
+    assert(sp != NULL);
+
+    sem_wait(&rt_ipv4_ar_lock);
+
+    memcpy(sp->hwaddr, hwaddr, sizeof(rt_eth_addr_t));
+    sp->flags |= RT_AR_F_HAS_HWADDR;
+
+    sem_post(&rt_ipv4_ar_lock);
+
+    return sp;
 }
 
 /**********************************************************************/

@@ -323,23 +323,24 @@ add_static_arp_entry (const char *argstr)
     int rc;
     strncpy(tmpstr, argstr, 127);
     argstr = tmpstr;
-    int rdidx = RT_RD_DEFAULT;
+    int prtidx;
     char *at    = index(tmpstr, '@');
-    char *numch = index(tmpstr, '#');
+    char *colon = index(tmpstr, ':');
     if (at == NULL) {
         fprintf(stderr, "missing '@' delimiter");
         return -1;
     }
-    if (numch != NULL) {
-        *numch = 0;
-        char *endptr;
-        rdidx = strtol(argstr, &endptr, 10);
-        if ((endptr != numch) || (rdidx == 0)) {
-            fprintf(stderr, "ERROR: could not parse routing domain index\n");
-            return -1;
-        }
-        argstr = &numch[1];
+    if (colon == NULL) {
+        goto ParseError;
     }
+    *colon = 0;
+    char *endptr;
+    prtidx = strtol(argstr, &endptr, 10);
+    if (endptr != colon) {
+        fprintf(stderr, "ERROR: could not parse port index\n");
+        return -1;
+    }
+    argstr = &colon[1];
     *at = 0;
     rt_ipv4_addr_t nhipa;
     rc = inet_pton(AF_INET, argstr, &nhipa);
@@ -357,17 +358,17 @@ add_static_arp_entry (const char *argstr)
             argstr);
         return -1;
     }
-    rt_lpm_t *rt = rt_lpm_add_nexthop(rdidx, nhipa);
-    if (rt == NULL) {
-        fprintf(stderr, "ERROR: no route for (%u) %s\n",
-            rdidx, rt_ipaddr_nr_str(nhipa));
-        return -1;
-    }
-    memcpy(rt->hwaddr, hwaddr, 6);
-    rt->flags |= RT_LPM_F_HAS_HWADDR;
-    dbgmsg(CONF, nopkt, "Static ARP Entry (%u) %s -> %s", rdidx,
+
+    rt_port_info_t *pi = rt_port_lookup(prtidx);
+    rt_ipv4_ar_learn(pi, nhipa, hwaddr);
+
+    dbgmsg(CONF, nopkt, "Static ARP Entry (%u) %s -> %s", prtidx,
         rt_ipaddr_nr_str(nhipa), rt_hwaddr_str(ts0, hwaddr));
+
     return 0;
+  ParseError:
+    fprintf(stderr, "ERROR: could not parse '%s'\n", argstr);
+    return -1;
 }
 
 int

@@ -48,14 +48,13 @@ rt_arp_pkt_hton (rt_pkt_arp_t *app, void *pkt)
 }
 
 static inline void
-rt_arp_flush_packet (rt_lpm_t *rt)
+rt_ar_flush_packet (rt_ipv4_ar_t *ar)
 {
-    if (rt->flags & RT_LPM_F_HAS_PACKET) {
-        rt_pkt_t pkt = rt->pkt;
-        rt_pkt_set_hw_addrs(pkt, rt->pi, rt->hwaddr);
-        dbgmsg(INFO, pkt, "flushing packet from LPM entry");
-        rt_pkt_send(pkt, rt->pi);
-        rt->flags &= ~RT_LPM_F_HAS_PACKET;
+    rt_pkt_t pkt;
+    int rc = rt_ipv4_ar_get_pkt(&pkt, ar);
+    if (rc == 1) {
+        dbgmsg(WARN, pkt, "Flush packet from AR entry");
+        rt_pkt_send(pkt, ar->pi);
     }
 }
 
@@ -69,7 +68,7 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
     }
     rt_lpm_t *rt = rt_lpm_lookup(pkt.rdidx, ipaddr);
     if (rt == NULL) {
-        dbgmsg(WARN, pkt, "no subnet of received ARP (%s)",
+        dbgmsg(DEBUG, pkt, "no route for received ARP (%s)",
             rt_ipaddr_nr_str(ipaddr));
         return;
     }
@@ -85,23 +84,17 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
                 pkt.rdidx, rt_ipaddr_nr_str(ipaddr), rt->pi->idx);
             return;
         }
-    } else {
-        dbgmsg(INFO, nopkt, "ARP creating host route for (%u) %s",
-            pkt.rdidx, rt_ipaddr_nr_str(ipaddr));
-        rt = rt_lpm_host_create(pkt.rdidx, ipaddr, pi, 0);
     } 
 
-    rt_ipv4_ar_learn(pi, ipaddr, hwaddr);
+    rt_ipv4_ar_t *ar = rt_ipv4_ar_learn(pi, ipaddr, hwaddr);
+    rt_ar_flush_packet(ar);
 
     char ts[32];
     dbgmsg(CONF, nopkt, "ARP learned (%u) %s : %s",
        pkt.rdidx, rt_ipaddr_nr_str(ipaddr),
        rt_hwaddr_str(ts, hwaddr));
 
-    rt_lpm_set_hwaddr(rt, hwaddr);
-    rt_arp_flush_packet(rt);
-
-    rt_dt_create(pkt.rdidx, ipaddr, rt, 0);
+    rt_dt_create(pkt.rdidx, ipaddr, rt, ar, 0);
 }
 
 static inline void
@@ -147,22 +140,6 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 {
     rt_rd_t rdidx = pkt.rdidx;
     rt_pkt_discard(pkt);
-    rt_lpm_t *rt = rt_lpm_lookup(rdidx, ap.s_ip_addr);
-    if ((rt == NULL) || (rt->prefix.len != 32)) {
-        dbgmsg(WARN, pkt, "ARP reply without request");
-        rt_pkt_discard(pkt);
-        return;
-    }
-    if (rt->flags & RT_LPM_F_LOCAL) {
-        dbgmsg(WARN, pkt, "ARP reply with local address");
-        rt_pkt_discard(pkt);
-        return;
-    }
-    if (rt->pi != pkt.pi) {
-        dbgmsg(WARN, pkt, "ARP reply for differnt port");
-        rt_pkt_discard(pkt);
-        return;
-    }
 
     char t0[32], t1[32], t2[32];
     dbgmsg(INFO, pkt, "ARP reply received from %s (%s) for (%u) %s",
@@ -170,13 +147,18 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
         rt_hwaddr_str(t1, ap.s_hw_addr), rdidx,
         rt_ipaddr_str(t2, ap.t_ip_addr));
 
-    rt_ipv4_ar_learn(pkt.pi, ap.s_ip_addr, ap.s_hw_addr);
+    rt_lpm_t *rt = rt_lpm_lookup(rdidx, ap.s_ip_addr);
+    if (rt == NULL) {
+        char ts[32];
+        dbgmsg(INFO, pkt, "no route for received ARP (%d: %s)",
+            rdidx, rt_ipaddr_str(ts, ap.s_ip_addr));
+        return;
+    }
 
-    rt_lpm_set_hwaddr(rt, ap.s_hw_addr);
-    rt_arp_flush_packet(rt);
+    rt_ipv4_ar_t *ar = rt_ipv4_ar_learn(pkt.pi, ap.s_ip_addr, ap.s_hw_addr);
+    rt_ar_flush_packet(ar);
 
-    rt_dt_create(rdidx, ap.s_ip_addr, rt, 0);
-    rt_pkt_discard(pkt);
+    rt_dt_create(rdidx, ap.s_ip_addr, rt, ar, 0);
 }
 
 void
@@ -311,18 +293,14 @@ void
 rt_arp_generate (rt_pkt_t pkt, rt_ipv4_addr_t ipda, rt_lpm_t *rt)
 {
     rt_port_info_t *pi = rt->pi;
+    int rc;
 
-    /* Is this a prefix route */
-    if (rt->prefix.len < 32) {
-        /* If so, create a Host Route in the LPM Table */
-        rt = rt_lpm_host_create(rt->rdidx, ipda, pi, 0);
+    rt_ipv4_ar_t *ar = rt_ipv4_ar_find_or_create(pi, ipda);
+    assert(ar != NULL);
+    rc = rt_ipv4_ar_set_pkt(pkt, ar);
+    if (rc != 1) {
+        rt_pkt_discard(pkt);
     }
-    if (rt->flags & RT_LPM_F_HAS_PACKET) {
-        rt_pkt_discard(rt->pkt);
-    }
-    /* Attach packet to host route */
-    rt->pkt = pkt;
-    rt->flags |= RT_LPM_F_HAS_PACKET;
 
     rt_arp_request(pi, ipda);
 }

@@ -80,40 +80,6 @@ rt_resolve_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t nhipa)
     return nhr;
 }
 
-static inline void
-rt_pkt_nh_resolve (rt_pkt_t pkt, rt_lpm_t *rt, rt_ipv4_addr_t ipda)
-{
-    rt_lpm_t *nhr = rt_resolve_nexthop(rt->nh_rdidx, rt->nhipa);
-    if (nhr == NULL) {
-        rt_pkt_discard(pkt);
-        return;
-    }
-
-    if (!(nhr->pi->flags & RT_PORT_F_EXIST)) {
-        dbgmsg(WARN, pkt, "port not enabled (%u)", nhr->pi->idx);
-        rt_pkt_discard(pkt);
-        return;
-    }
-
-    /* Set the Next Hop of the route */
-    rt->nh = nhr;
-
-    if (!(nhr->flags & RT_LPM_F_HAS_HWADDR)) {
-        rt_arp_generate(pkt, rt->nhipa, nhr);
-        return;
-    }
-
-    dbgmsg(INFO, pkt, "forwarding - next-hop already resolved");
-
-    /* All information available. Create DT entry */
-    rt_dt_create(pkt.rdidx, ipda, nhr, 0);
-
-    /* Update MAC addresses */
-    rt_pkt_set_hw_addrs(pkt, nhr->pi, nhr->hwaddr);
-    /* Send Packet */
-    rt_pkt_send(pkt, nhr->pi);
-}
-
 void
 rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 {
@@ -137,7 +103,7 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 
     if (rt_flags & RT_DT_F_DISCARD) {
         if (pkt.pi != NULL) {
-            rt_dt_create(pkt.rdidx, ipda, rt, rt_flags);
+            rt_dt_create(pkt.rdidx, ipda, rt, NULL, rt_flags);
         }
         rt_pkt_discard(pkt);
         return;
@@ -149,28 +115,33 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
         rt_pkt_ipv4_calc_chksum(ip);
     }
 
-    if (rt->nh != NULL) {
-        rt = rt->nh;
-        rt_flags = rt->flags;
-        nhipa = rt->prefix.addr;
+    if (rt_flags & RT_LPM_F_SUBNET) {
+        nhipa = ipda;
     } else
     if (rt_flags & RT_LPM_F_HAS_NEXTHOP) {
         nhipa = rt->nhipa;
-        if (!(rt->flags & RT_LPM_F_HAS_HWADDR)) {
-            rt_pkt_nh_resolve(pkt, rt, ipda);
-            return;
-        }
+    } else {
+        dbgmsg(WARN, pkt, "What is this (%u) %s",
+            rdidx, rt_ipaddr_nr_str(ipda));
+        rt_pkt_discard(pkt);
+        return;
     }
 
-    if (rt_flags & RT_LPM_F_HAS_HWADDR) {
-        /* Add a Direct Table entry */
-        rt_dt_create(rdidx, ipda, rt, 0);
-        /* Update MAC addresses and send */
-        rt_pkt_set_hw_addrs(pkt, rt->pi, rt->hwaddr);
-        rt_pkt_send(pkt, rt->pi);
-    } else {
+    rt_ipv4_ar_t *ar = rt_ipv4_ar_lookup(rt->pi, nhipa);
+    if (ar == NULL) {
+        char ts[32];
+        dbgmsg(INFO, pkt, "Generate ARP for (%u) %s",
+            rdidx, rt_ipaddr_str(ts, nhipa));
         rt_arp_generate(pkt, nhipa, rt);
+        return;
     }
+
+    rt_dt_create(rdidx, ipda, rt, ar, 0);
+
+    /* Update the MAC addresses */
+    rt_pkt_set_hw_addrs(pkt, rt->pi, ar->hwaddr);
+
+    rt_pkt_send(pkt, rt->pi);
 }
 
 static inline void

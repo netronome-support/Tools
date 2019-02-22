@@ -35,7 +35,7 @@ Command Line Arguments (beyond what l2fwd supports):
     This adds a route to the specified (or default) routing domain.
     Note that the next-hop can exist in a different routing domain.
 
- --static [<route domain>#]<next hop IPv4 addr>@<MAC address>
+ --static <prtidx>:<next hop IPv4 addr>@<MAC address>
 
     Add static ARP entry.
 

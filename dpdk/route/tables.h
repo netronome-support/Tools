@@ -20,7 +20,7 @@ typedef struct rt_dt_route_s {
   uint8_t flags;
   void *tx_buffer;
   struct {
-    rt_eth_addr_t *dst;
+    rt_eth_addr_t dst;
     rt_eth_addr_t src;
   } eth;
   rt_cnt_idx_t cntidx;
@@ -66,10 +66,15 @@ typedef struct rt_ipv4_ar_s {
     struct rt_ipv4_ar_s *prev, *next;
     rt_port_info_t *pi;
     rt_ipv4_addr_t ipaddr;
+    uint32_t flags;
     rt_eth_addr_t hwaddr; /* Remote MAC address */
+    rt_pkt_t pkt;
 } rt_ipv4_ar_t;
 
 #define RT_IPV4_AR_TABLE_SIZE 8192
+
+#define RT_AR_F_HAS_HWADDR      (1 << 0)
+#define RT_AR_F_HAS_PKT         (1 << 1)
 
 /**********************************************************************/
 /* Local Address Resolution database */
@@ -116,11 +121,13 @@ rt_dt_lookup (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr)
 }
 
 rt_dt_route_t *rt_dt_lookup (rt_rd_t vifidx, rt_ipv4_addr_t addr);
-extern void rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t addr,
-    rt_lpm_t *, uint8_t flags);
+extern void rt_dt_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr,
+    rt_lpm_t *rt, rt_ipv4_ar_t *ar, uint8_t flags);
 extern void rt_dt_init (void);
 extern int rt_dt_sprintf (char *str, const rt_dt_route_t *dt);
 extern void rt_dt_dump (FILE *fd);
+
+/**********************************************************************/
 
 rt_lpm_t *rt_lpm_lookup (rt_rd_t rdidx, rt_ipv4_addr_t addr);
 rt_lpm_t *rt_lpm_find_or_create (rt_rd_t rdidx,
@@ -165,8 +172,9 @@ void rt_lpm_gen_icmp_requests (void);
 void rt_ar_table_init (void);
 rt_ipv4_ar_t *
 rt_ipv4_ar_lookup (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
-rt_eth_addr_t *
-rt_ipv4_ar_get_eth_addr (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
+rt_ipv4_ar_t *rt_ipv4_ar_find_or_create (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
+int rt_ipv4_ar_get_pkt (rt_pkt_t *pkt, rt_ipv4_ar_t *ar);
+int rt_ipv4_ar_set_pkt (rt_pkt_t pkt, rt_ipv4_ar_t *ar);
 rt_ipv4_ar_t *rt_ipv4_ar_learn (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
     rt_eth_addr_t hwaddr);
 /**********************************************************************/
