@@ -27,5 +27,6 @@ int parse_ipv4_route (const char *arg);
 int port_set_promisc_flag (const char *arg);
 int add_static_arp_entry (const char *arg);
 int parse_port_pinning (const char *arg);
+int parse_add_iface_addr (const char *arg);
 
 #endif

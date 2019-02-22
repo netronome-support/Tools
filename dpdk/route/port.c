@@ -15,6 +15,8 @@ rt_port_create (rt_port_index_t port, void *hwaddr, void *tx_buffer)
     assert(tx_buffer != NULL);
     pi->flags |= RT_PORT_F_EXIST;
     pi->idx = port;
+    /* Assign Port to default routing domain */
+    pi->rdidx = RT_RD_DEFAULT;
     memcpy(&pi->hwaddr, hwaddr, 6);
     pi->tx_buffer = tx_buffer;
     char ts[32];
@@ -35,18 +37,8 @@ rt_port_set_ipv4_addr (rt_port_index_t port, rt_ipv4_addr_t ipaddr, int len)
     pi->ipaddr = ipaddr;
     pi->prefix.addr = ipaddr;
     pi->prefix.len  = len;
-    /* Create a subnet-route and a host route */
-    rt_ipv4_prefix_t prefix;
-    prefix.addr = ipaddr;
-    prefix.len = len;
-    pi->prefix = prefix;
-    /* Add a route to the LPM for the subnet */
-    rt_lpm_find_or_create(pi->rdidx, prefix, pi);
-    /* Add a LOCAL route to the LPM for the IP address */
-    rt_lpm_host_create(pi->rdidx, ipaddr, pi, RT_LPM_F_LOCAL);
-
-    dbgmsg(CONF, nopkt, "Port %d IP address (%d): %s/%u",
-        port, pi->rdidx, rt_ipaddr_nr_str(ipaddr), len);
+    /* Add subnet to LPM table and Local Address Table */
+    rt_lpm_add_iface_addr(pi, ipaddr, len);
 }
 
 void
@@ -172,6 +164,7 @@ rt_port_table_init (void)
         memset(&rt_port_table[prtidx], 0, sizeof(rt_port_info_t));
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         pi->idx = prtidx;
+        pi->rdidx = RT_RD_DEFAULT;
         pi->rx_lcore = RT_PORT_LCORE_UNASSIGNED;
         pi->tx_lcore = RT_PORT_LCORE_UNASSIGNED;
     }

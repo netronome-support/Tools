@@ -10,6 +10,7 @@
 #include "pktutils.h"
 #include "port.h"
 
+/**********************************************************************/
 typedef struct rt_dt_route_s {
   struct rt_dt_route_s *prev, *next;
   rt_port_info_t *pi;
@@ -28,6 +29,7 @@ typedef struct rt_dt_route_s {
 #define RT_DT_F_LOCAL           (1 << 0)
 #define RT_DT_F_DISCARD         (1 << 1)
 
+/**********************************************************************/
 /* Linear List of Route Data Entries */
 typedef struct rt_lpm_s {
   struct rt_lpm_s *prev, *next;
@@ -36,7 +38,12 @@ typedef struct rt_lpm_s {
   uint32_t flags;
   rt_port_info_t *pi; /* Egress Port Information */
   rt_eth_addr_t hwaddr;
-  rt_ipv4_addr_t nhipa;
+  union {
+    /* Next-hop IP address */
+    rt_ipv4_addr_t nhipa;
+    /* For subnet routes: Inteface IP address */
+    rt_ipv4_addr_t ifipa;
+  };
   rt_rd_t nh_rdidx;
   struct rt_lpm_s *nh; /* Next Hop */
   rt_pkt_t pkt; /* Pending Packet for Address Resolution */
@@ -50,7 +57,35 @@ typedef struct rt_lpm_s {
 #define RT_LPM_F_HAS_PORTINFO   (1 << 4)
 #define RT_LPM_F_IS_NEXTHOP     (1 << 5)
 #define RT_LPM_F_DISCARD        (1 << 6)
+#define RT_LPM_F_SUBNET         (1 << 7)
 
+/**********************************************************************/
+/* Address Resolution Table */
+
+typedef struct rt_ipv4_ar_s {
+    struct rt_ipv4_ar_s *prev, *next;
+    rt_port_info_t *pi;
+    rt_ipv4_addr_t ipaddr;
+    rt_eth_addr_t hwaddr; /* Remote MAC address */
+} rt_ipv4_ar_t;
+
+#define RT_IPV4_AR_TABLE_SIZE 8192
+
+/**********************************************************************/
+/* Local Address Resolution database */
+typedef struct rt_lat_s {
+    struct rt_lat_s *prev, *next;
+    rt_port_info_t *pi;
+    rt_ipv4_addr_t ipaddr;
+    uint32_t flags;
+    rt_eth_addr_t hwaddr; /* Local MAC address */
+} rt_lat_t;
+
+#define RT_LAR_F_USE_PORT_HWADDR (1 << 0)
+
+#define RT_LAR_TABLE_SIZE 8192
+
+/**********************************************************************/
 #define RT_DT_SIZE 65535
 extern rt_dt_route_t dt[RT_DT_SIZE];
 
@@ -92,6 +127,8 @@ rt_lpm_t *rt_lpm_find_or_create (rt_rd_t rdidx,
     rt_ipv4_prefix_t prefix, rt_port_info_t *pi);
 rt_lpm_t *rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
     uint32_t flags, rt_ipv4_addr_t nhipa, rt_rd_t nh_rdidx);
+void rt_lpm_add_iface_addr (rt_port_info_t *pi,
+    rt_ipv4_addr_t ipaddr, int plen);
 rt_lpm_t *rt_lpm_add_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr);
 
 static inline rt_lpm_t *
@@ -124,5 +161,20 @@ extern void rt_lpm_table_init (void);
 extern int rt_lpm_sprintf (char *str, const rt_lpm_t *rt);
 extern void rt_lpm_dump (FILE *);
 void rt_lpm_gen_icmp_requests (void);
+/**********************************************************************/
+void rt_ar_table_init (void);
+rt_ipv4_ar_t *
+rt_ipv4_ar_lookup (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
+rt_eth_addr_t *
+rt_ipv4_ar_get_eth_addr (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
+rt_ipv4_ar_t *rt_ipv4_ar_learn (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
+    rt_eth_addr_t hwaddr);
+/**********************************************************************/
+void rt_lat_init (void);
+rt_lat_t *rt_lat_add (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
+    rt_eth_addr_t *hwaddr);
+rt_lat_t *rt_lat_db_lookup (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
+rt_eth_addr_t *rt_lat_get_eth_addr (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr);
+/**********************************************************************/
 
 #endif

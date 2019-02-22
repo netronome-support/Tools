@@ -174,7 +174,11 @@ rt_dhcp_discover (void)
     int prtidx;
     for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
-        if ((pi->rdidx != 0) && (pi->ipaddr == 0)) {
+        if (!(pi->flags & RT_PORT_F_EXIST))
+            continue;
+        if (pi->rdidx == 0)
+            continue;
+        if (pi->ipaddr == 0) {
             rt_dhcp_info_t *info = &pi->dhcpinfo;
             info->transaction = lrand48();
             info->state = 1;

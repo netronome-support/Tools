@@ -52,10 +52,27 @@ do { \
     dbgmsg_rate(level, 64, 1, pkt, fmt, ##__VA_ARGS__);
 
 static inline const char *
+rt_integer_str (char *str, int value)
+{
+    sprintf(str, "%d", value);
+    return str;
+}
+
+static inline const char *
 rt_ipaddr_str (char *str, rt_ipv4_addr_t ipaddr)
 {
     rt_ipv4_addr_t n = htonl(ipaddr);
     inet_ntop(AF_INET, &n, str, INET_ADDRSTRLEN);
+    return str;
+}
+
+static inline const char *
+rt_prefix_str (char *str, rt_ipv4_prefix_t prefix)
+{
+    rt_ipv4_addr_t n = htonl(prefix.addr);
+    inet_ntop(AF_INET, &n, str, INET_ADDRSTRLEN);
+    int sl = strlen(str);
+    sprintf(&str[sl], "/%d", prefix.len);
     return str;
 }
 

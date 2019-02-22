@@ -94,7 +94,7 @@ parse_iface_addr (const char *arg)
     if (numch != NULL) {
         *numch = 0;
         int rdidx = strtol(argstr, &endptr, 10);
-        if ((endptr != numch) || (rdidx == 0)) {
+        if ((endptr != numch) || (rdidx < 1)) {
             errmsg = "could not parse routing domain index";
             goto Error;
         }
@@ -218,6 +218,54 @@ parse_ipv4_route (const char *arg)
         nh_rdidx, rt_ipaddr_str(t1, ntohl(nhipa)));
 
     return 0;
+}
+
+int
+parse_add_iface_addr (const char *arg)
+{
+    /* Format: <portid>:<ipv4 addr> */
+    int rc;
+    char tmpstr[128], *argstr = tmpstr, *endptr;
+    const char *errmsg;
+    strncpy(argstr, arg, 127);
+    rt_ipv4_addr_t ipaddr = 0;
+    int plen = 32;
+    /* Parse Port Number */
+    char *colon = index(argstr, ':');
+    if (colon == NULL) {
+        errmsg = "could not find ':'";
+        goto Error;
+    }
+    *colon = 0; /* replace the colon with '\0' */
+    /* Parse Port Index */
+    long int port = strtol(argstr, &endptr, 10);
+    if (endptr != colon) {
+        errmsg = "could not parse port number";
+        goto Error;
+    }
+    argstr = &colon[1];
+    /* Parse Prefix Length */
+    char *slash = index(argstr, '/');
+    if (slash != NULL) {
+        *slash = 0;
+        plen = strtol(&slash[1], &endptr, 10);
+    }
+    /* Parse IPv4 Address */
+    rc = inet_pton(AF_INET, argstr, &ipaddr);
+    if (rc != 1) {
+        errmsg = "could not parse interface IP address ";
+        goto Error;
+    }
+    ipaddr = ntohl(ipaddr);
+    /* Get a pointer to the port info structure */
+    rt_port_info_t *pi = rt_port_lookup(port);
+    /* Add interface address to LPM and Local Address Table */
+    rt_lpm_add_iface_addr(pi, ipaddr, plen);
+    return 0;
+
+  Error:
+    fprintf(stderr, "ERROR: %s '%s'.\n", errmsg, arg);
+    return -1;
 }
 
 int

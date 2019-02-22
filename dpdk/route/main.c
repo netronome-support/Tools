@@ -438,6 +438,7 @@ rt_parse_args (int argc, char **argv)
         { "static", required_argument, NULL, 1005},
         { "log-level", required_argument, NULL, 1006},
         { "pin", required_argument, NULL, 1007},
+        { "add-iface-addr", required_argument, NULL, 1008},
         { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
         { "no-statistics", no_argument, &print_statistics, 0},
         { "ping-nexthops", no_argument, &ping_nexthops, 1},
@@ -508,6 +509,10 @@ rt_parse_args (int argc, char **argv)
 
         case 1007: /* --pin */
             rc = parse_port_pinning(optarg);
+            break;
+
+        case 1008: /* --add-iface-addr */
+            rc = parse_add_iface_addr(optarg);
             break;
 
         /* long options */
@@ -624,6 +629,8 @@ main (int argc, char **argv)
     rt_lpm_table_init();
     rt_dt_init ();
     rt_port_table_init();
+    rt_lat_init();
+    rt_ar_table_init();
 
     /* parse application arguments (after the EAL ones) */
     ret = rt_parse_args(argc, argv);

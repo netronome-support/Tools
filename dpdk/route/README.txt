@@ -39,6 +39,10 @@ Command Line Arguments (beyond what l2fwd supports):
 
     Add static ARP entry.
 
+ --add-iface-addr <portid>:<IPv4 addr>[/<prefix length>]
+
+    Add extra IPv4 addresses or subnet to a port.
+
  --pin <portid>:<RX & TX lcore>
  --pin <portid>:<RX lcore>,<TX lcore>
 
