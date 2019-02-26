@@ -4,20 +4,21 @@
 ##  Defaults:
 
 # URL of NFP Driver Git Repository
-: "${NS_GIT_NFP_DRV_REPO_URL:=https://github.com/Netronome/nfp-drv-kmods}"
+: ${NS_GIT_REPO_HOME:=https://github.com/Netronome}
+: ${NS_GIT_NFP_DRV_REPO_URL:=$NS_GIT_REPO_HOME/nfp-drv-kmods}
 
 if [ "$(whoami)" == "root" ]; then
     # Installation Directory
-    : ${GIT_REPO_BASE_DIR:="/opt/src/netronome-support"}
+    : ${GIT_REPO_BASE_DIR:="/opt/src/netronome"}
 
     # Log File Location
-    : "${NS_INSTALL_LOG_DIR:=/var/log/install}"
+    : ${NS_INSTALL_LOG_DIR:=/var/log/install}
 
     # No need for 'sudo'
     SUDO=""
 else
     : ${GIT_REPO_BASE_DIR:="$HOME/build/git/netronome"}
-    : "${NS_INSTALL_LOG_DIR:=$HOME/.logs}"
+    : ${NS_INSTALL_LOG_DIR:=$HOME/.logs}
     : ${DPDK_INSTALL_DIR:="$HOME/build"}
     : ${DPDK_DOWNLOAD_DIR:="$HOME/.cache/download"}
     : ${DPDK_SETTINGS_DIR:="$HOME/.config/dpdk"}

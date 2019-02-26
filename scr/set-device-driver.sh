@@ -1,13 +1,17 @@
 #!/bin/bash
 
+toolname=$(basename $0)
 ########################################################################
 function usage () {
 cat <<EOF
 
-Tool for binding drivers to PCI devices.
+$toolname - Tool for binding drivers to PCI devices.
+
+This tool has some overlap in functionality with dpdk-devbind, but
+$toolname is much faster.
 Has special functions for identifying Netronome Agilio VF devices.
 
-Syntax: $(basename $0) [<options>] [<PCI BDF> ...]
+Syntax: $toolname [<options>] [<PCI BDF> ...]
 
 Options:
   --help -h                     Print this help
@@ -16,7 +20,19 @@ Options:
   --driver -d <name>            Specify driver
   --nfp-vf-idx -i <idx>         Specify NFP VF by index
   --nfp-vf-idx -i <start>-<end> Specify a range of NFP VFs
-  --pci-if-idx <index>          Specify interface index from lspci list
+  --pci-if-idx <idx>            Specify interface index from lspci list
+
+Examples:
+  $toolname -d vfio-pci 0a:08.3
+    - Attach driver to PCI device
+  $toolname -d none 0a:08.3 0a:08.4
+    - Remove driver from PCI devices
+  $toolname -d nfp_netvf --nfp-vf-idx 0-7
+    - Attach driver to NFP VFs 0..7
+  $toolname -d igb_uio --pci-if-idx 1
+    - Attach driver to second Ethernet PCI device in lspci listing
+  $toolname -d igb_uio --nfp-vf-idx 0-7 --verify
+    - Return error code (-1) if the driver is not attached
 
 EOF
 }
@@ -24,7 +40,7 @@ EOF
 function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
-        echo "ERROR($(basename $0)): $errmsg"
+        echo "ERROR($toolname): $errmsg"
         exit -1
     fi
 }
@@ -50,7 +66,7 @@ pci_if_list=()
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
-          "--help"|"-h") usage ;;
+          "--help"|"-h") usage ; exit 0 ;;
           "--verbose")          optVerbose="yes" ;;
           "--driver"|"-d")      param="driver" ;;
           "--nfp-vf-idx"|"-i")  param="vf-index" ;;
@@ -76,6 +92,8 @@ for arg in "$@" ; do
     fi
 done
 
+########################################################################
+verbose "Running: $0 $*"
 ########################################################################
 pkgs=()
 pkgs+=( "lspci@pciutils" )
@@ -136,6 +154,7 @@ if [ ${#vf_idx_list[@]} -gt 0 ]; then
         | cut -d ':' -f 1 )
     test "$nfpbus" != ""
         check_status "could not identify an NFP in the system"
+    verbose "Located NFP device at 0000:$nfpbus:00.0"
     for nfpidx in ${vf_idx_list[@]} ; do
         if [[ "$nfpidx" =~ $re_integer ]]; then
             test $nfpidx -lt 60
@@ -167,6 +186,7 @@ if [ ${#pci_if_list[@]} -gt 0 ]; then
 fi
 ########################################################################
 faillist=()
+verbose "Device List: ${devlist[@]}"
 for pcibdf in ${devlist[@]} ; do
     devdir="/sys/bus/pci/devices/$pcibdf"
     test -d $devdir
@@ -201,4 +221,5 @@ if [ "$optVerify" != "" ] && [ ${#faillist[@]} -gt 0 ]; then
     exit -1
 fi
 ########################################################################
+verbose "SUCCESS"
 exit 0

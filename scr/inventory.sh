@@ -29,23 +29,24 @@ fi
 show "Kernel" "$(uname -r)"
 
 ########################################################################
-manu=$(dmidecode --type system | sed -rn 's/^\s*Manufacturer: (.*)$/\1/p')
-prod=$(dmidecode --type system | sed -rn 's/^\s*Product Name: (.*)$/\1/p')
+if [ -x "$(which dmidecode 2> /dev/null)" ]; then
+    manu=$(dmidecode --type system | sed -rn 's/^\s*Manufacturer: (.*)$/\1/p')
+    prod=$(dmidecode --type system | sed -rn 's/^\s*Product Name: (.*)$/\1/p')
 
-show "Server" "$manu $prod"
+    show "Server" "$manu $prod"
 
-########################################################################
-vendor=$(dmidecode --type bios   | sed -rn 's/^\s*Vendor: (.*)$/\1/p')
-version=$(dmidecode --type bios  | sed -rn 's/^\s*Version: (.*)$/\1/p')
-rel_date=$(dmidecode --type bios | sed -rn 's/^\s*Release Date: (.*)$/\1/p')
-revision=$(dmidecode --type bios | sed -rn 's/^\s*BIOS Revision: (.*)$/\1/p')
+    vendor=$(dmidecode --type bios   | sed -rn 's/^\s*Vendor: (.*)$/\1/p')
+    version=$(dmidecode --type bios  | sed -rn 's/^\s*Version: (.*)$/\1/p')
+    rel_date=$(dmidecode --type bios | sed -rn 's/^\s*Release Date: (.*)$/\1/p')
+    revision=$(dmidecode --type bios | sed -rn 's/^\s*BIOS Revision: (.*)$/\1/p')
 
-show "BIOS" "$vendor Version $version ($rel_date); Revision $revision"
+    show "BIOS" "$vendor Version $version ($rel_date); Revision $revision"
+fi
 
 ########################################################################
 cpu=$(lscpu | sed -rn 's/^Vendor ID:\s+(\S.*)$/\1/p')
 cpu_model=$(lscpu | sed -rn 's/^Model name:\s+(\S.*)$/\1/p')
-if [ "$cpu_model" == "" ]; then
+if [ "$cpu_model" == "" ] && [ -x "$(which dmidecode 2> /dev/null)" ]; then
   cpu_version=$(dmidecode --type processor \
     | sed -rn 's/^\s*Version: (.*)$/\1/p' \
     | head -1)
@@ -77,31 +78,33 @@ function extract () {
     printf -v $varname "%s" "$value"
 }
 
-dmidecode --type memory \
-    | awk '{printf "%s@@@", $0}' \
-    | sed -r 's/@@@@@@/@@@\n@@@/g' \
-    | sed -r 's/@@@\s*/@@@/g' \
-    | grep -E "^@@@Handle" \
-    | grep -E "@@@Memory Device@@@" \
-    | grep -E "@@@Form Factor: DIMM@@@" \
-    | grep -E "@@@Data Width: [0-9]+ bits@@@" \
-    | while read line ;
-do
-    #extract "m_width_t"     "Total Width"
-    extract "m_width_d"     "Data Width"
-    extract "m_size"        "Size"
-    extract "m_locator"     "Locator"
-    #extract "m_manu"        "Manufacturer"
-    extract "m_type"        "Type"
-    extract "m_speed"       "Speed"
-    extract "m_rank"        "Rank"
-    #extract "m_part_n"      "Part Number"
-    extract "m_cfg_clock"   "Configured Clock Speed"
-    extract "m_max_clock"    "Configured Voltage"
-    info="$m_width_d, $m_size, $m_locator"
-    info="$info, $m_cfg_clock (max $m_speed), rank $m_rank"
-    show "DIMM" "$info"
-done
+if [ -x "$(which dmidecode 2> /dev/null)" ]; then
+    dmidecode --type memory \
+        | awk '{printf "%s@@@", $0}' \
+        | sed -r 's/@@@@@@/@@@\n@@@/g' \
+        | sed -r 's/@@@\s*/@@@/g' \
+        | grep -E "^@@@Handle" \
+        | grep -E "@@@Memory Device@@@" \
+        | grep -E "@@@Form Factor: DIMM@@@" \
+        | grep -E "@@@Data Width: [0-9]+ bits@@@" \
+        | while read line ;
+    do
+        #extract "m_width_t"     "Total Width"
+        extract "m_width_d"     "Data Width"
+        extract "m_size"        "Size"
+        extract "m_locator"     "Locator"
+        #extract "m_manu"        "Manufacturer"
+        extract "m_type"        "Type"
+        extract "m_speed"       "Speed"
+        extract "m_rank"        "Rank"
+        #extract "m_part_n"      "Part Number"
+        extract "m_cfg_clock"   "Configured Clock Speed"
+        extract "m_max_clock"    "Configured Voltage"
+        info="$m_width_d, $m_size, $m_locator"
+        info="$info, $m_cfg_clock (max $m_speed), rank $m_rank"
+        show "DIMM" "$info"
+    done
+fi
 
 ########################################################################
 ovsctl="/opt/netronome/bin/ovs-ctl"

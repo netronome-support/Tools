@@ -33,6 +33,7 @@ list+=( "/etc/*-release" )
 list+=( "/etc/network" )
 list+=( "/etc/sysconfig/network-scripts/ifcfg*" )
 list+=( "/etc/networks" )
+list+=( "/etc/NetworkManager/conf.d" )
 list+=( "/etc/hosts" )
 list+=( "/etc/fstab" )
 list+=( "/etc/netronome.conf" )
@@ -257,6 +258,8 @@ run "/opt/netronome/bin/nfp-res" "-L" "nfp/locks.txt"
 
 run "dpdk-devbind.py" "--status" "dpdk-devbind-status.txt"
 run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
+run "/usr/lib/virtio-forwarder/virtioforwarder_core_pinner.py" "" \
+                                 "virtioforwarder_core_pinner.txt"
 
 ########################################################
 

@@ -5,11 +5,14 @@ dldir="/var/cache/download"
 ############################################################
 ns_atchmnt_url="https://help.netronome.com/helpdesk/attachments"
 deb_dl_dir="/var/cache/download/deb"
+git_repo_base_dir="/opt/git"
 ############################################################
 function check_status () {
     rc="$?" ; errmsg="$1"
     if [ "$rc" != "0" ]; then
-        echo "ERROR($(basename $0)): $errmsg" >&2
+        if [ "$errmsg" != "" ]; then
+            echo "ERROR($(basename $0)): $errmsg" >&2
+        fi
         exit -1
     fi
 }
@@ -72,70 +75,39 @@ test "$ID" == "ubuntu" -a "$VERSION_ID" == "18.04"
 
 ############################################################
 
+if test $(find /var/lib/apt -type d -name 'lists' -mmin +10080) ; then
+    apt-get update
+        check_status "failed to update Debian package database"
+fi
+
+############################################################
+
 pkglist=()
 pkglist+=( make gcc libelf-dev bc build-essential binutils-dev )
 pkglist+=( ncurses-dev libssl-dev util-linux pkg-config elfutils )
 pkglist+=( libreadline-dev libmnl-dev bison flex git wget )
 pkglist+=( "initramfs-tools" ) # Missed in the documentation
+pkglist+=( ethtool )
 
 apt-get install -y ${pkglist[@]}
     check_status "failed to install packages"
 
 ############################################################
 
-kern_url="http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.18-rc8"
-kern_dl_dir="/var/cache/download/kernel"
-kvers0="4.18.0-041800rc8"
-kvers1="$kvers0.201808052031"
-kvers2="${kvers0}-generic_${kvers1}"
-
-# Kernel File Name List
-kfnlist=()
-kfnlist+=( "linux-headers-${kvers0}_${kvers1}_all.deb" )
-kfnlist+=( "linux-headers-${kvers2}_amd64.deb" )
-kfnlist+=( "linux-image-unsigned-${kvers2}_amd64.deb" )
-kfnlist+=( "linux-modules-${kvers2}_amd64.deb" )
-# Kernel File Search Directory List
-kfsdlist=()
-kfsdlist+=( "$HOME" )
-kfsdlist+=( "$kern_dl_dir" )
-kfsdlist+=( "/tmp" )
-
-kiflist=()
-
 check_version 2 "#.#" "$(uname -r)" "4.18"
 if [ $? -ne 0 ]; then
-    echo " - Install Linux Kernel $kvers0"
-    for kfn in ${kfnlist[@]} ; do
-        kfm=""
-        for srchdir in ${kfsdlist[@]} ; do
-            if [ -f "$srchdir/$kfn" ]; then
-                kfm="$srchdir/$kfn"
-                break
-            fi
-        done
-        if [ "$kfm" == "" ]; then
-            download $kern_dl_dir "$kern_url/$kfn" "$kfn" \
-                || exit -1
-            kfm="$kern_dl_dir/$kfn"
-        fi
-        kiflist+=( "$kfm" )
-    done
-    dpkg -i ${kiflist[@]}
-        check_status "failed to install Kernel Debian packages"
-    update-grub2
-        check_status "'update-grub2' failed"
-    echo "PLEASE REBOOT into installed kernel"
-    exit 0
-else
-    echo " - Current Kernel version looks good ($(uname -r))"
+    install-linux-kernel-from-git.sh
+        check_status ""
+
+    printf "\n\n!! PLEASE REBOOT and reissue command !!\n\n\n"
+    exit -1
 fi
 
 ############################################################
-
-if test $(find /var/lib/apt -type d -name 'lists' -mmin +10080) ; then
-    apt-get update
-        check_status "failed to update Debian package database"
+if [ ! -d /lib/modules/$(uname -r)/build/usr/include ]; then
+    echo " - Install Linux Headers"
+    make -C /lib/modules/$(uname -r)/build headers_install
+        check_status "failed to install kernel headers"
 fi
 
 ############################################################
@@ -170,7 +142,6 @@ fi
 
 ############################################################
 
-git_repo_base_dir="/opt/git"
 git_url="https://git.kernel.org/pub/scm/network/iproute2"
 git_repo_name="iproute2-next"
 git_repo_dir="$git_repo_base_dir/$git_repo_name"
@@ -208,17 +179,6 @@ ln -sf /usr/include/x86_64-linux-gnu/asm /usr/include
     check_status "failed to create symbolic link"
 
 ############################################################
-##  eBPF tool part of Linux Kernel
-
-if [ ! -d "$git_repo_base_dir/linux" ]; then
-    echo " - Install Linux Kernel source tree (for epbf tool)"
-    url="https://github.com/torvalds/linux"
-    mkdir -p $git_repo_base_dir
-    git -C $git_repo_base_dir clone $url
-        check_status "failed to clone repo $url"
-fi
-
-############################################################
 if ! which bpftool > /dev/null 2>&1 ; then
     bpftool_version=""
 else
@@ -247,6 +207,8 @@ c_pkgvers=$(apt-cache show bpftool 2> /dev/null \
 # Sorry, these 'attachment numbers' is a bad way of referencing packages,
 # but at the moment I don't know of anything better.
 attachid="36014191625" ; r_pkgvers="4.18"
+attachid="36025601060" ; r_pkgvers="4.20"
+
 
 check_version 2 "#.#" "$c_pkgvers" "$r_pkgvers"
 if [ $? -ne 0 ]; then
@@ -261,7 +223,7 @@ fi
 c_pkgvers=$(apt-cache show agilio-bpf-firmware 2> /dev/null \
     | sed -rn 's/^Version:\s(\S+)$/\1/p')
 
-attchid="36012574752" ; r_pkgvers="2.0.6.121-1"
+attchid="36019898763" ; r_pkgvers="2.0.6.124-1"
 
 check_version 4 "#.#.#.#" "$c_pkgvers" "$r_pkgvers"
 if [ $? -ne 0 ]; then
