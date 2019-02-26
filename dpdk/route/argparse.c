@@ -198,7 +198,7 @@ parse_ipv4_route (const char *arg)
         (strcasecmp(sp_nexthop, "discard") == 0) ||
         (strcasecmp(sp_nexthop, "blackhole") == 0)) {
         nhipa = 0; /* Blackhole */
-        nh_flags |= RT_LPM_F_DISCARD;
+        nh_flags |= RT_FWD_F_DISCARD;
     } else {
         rc = inet_pton(AF_INET, sp_nexthop, &nhipa);
         if (rc != 1) {

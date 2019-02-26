@@ -53,7 +53,9 @@ rt_ar_flush_packet (rt_ipv4_ar_t *ar)
     rt_pkt_t pkt;
     int rc = rt_ipv4_ar_get_pkt(&pkt, ar);
     if (rc == 1) {
-        dbgmsg(WARN, pkt, "Flush packet from AR entry");
+        /* Update the MAC addresses */
+        rt_pkt_set_hw_addrs(pkt, ar->pi, ar->hwaddr);
+        dbgmsg(INFO, pkt, "Flush packet from AR entry");
         rt_pkt_send(pkt, ar->pi);
     }
 }
@@ -93,8 +95,6 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
     dbgmsg(CONF, nopkt, "ARP learned (%u) %s : %s",
        pkt.rdidx, rt_ipaddr_nr_str(ipaddr),
        rt_hwaddr_str(ts, hwaddr));
-
-    rt_dt_create(pkt.rdidx, ipaddr, rt, ar, 0);
 }
 
 static inline void
@@ -142,7 +142,7 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
     rt_pkt_discard(pkt);
 
     char t0[32], t1[32], t2[32];
-    dbgmsg(INFO, pkt, "ARP reply received from %s (%s) for (%u) %s",
+    dbgmsg(INFO, pkt, "ARP reply received from %s (%s) (local: (%u) %s)",
         rt_ipaddr_str(t0, ap.s_ip_addr),
         rt_hwaddr_str(t1, ap.s_hw_addr), rdidx,
         rt_ipaddr_str(t2, ap.t_ip_addr));
@@ -157,8 +157,6 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 
     rt_ipv4_ar_t *ar = rt_ipv4_ar_learn(pkt.pi, ap.s_ip_addr, ap.s_hw_addr);
     rt_ar_flush_packet(ar);
-
-    rt_dt_create(rdidx, ap.s_ip_addr, rt, ar, 0);
 }
 
 void
@@ -223,33 +221,29 @@ rt_arp_send_request (rt_pkt_t pkt, rt_port_info_t *pi,
     ap.opcode       = 1;
     /* Sender Info */
     memcpy(&ap.s_hw_addr, &pi->hwaddr, 6);
-    #if 0
     /* Locate local IP address from route table */
     rt_lpm_t *srt = rt_lpm_lookup(pi->rdidx, ipda);
     char ts0[32];
     if (srt == NULL) {
-        dbgmsg(WARN, nopkt, "ARP failed - %s is not in any subnet",
-            rt_ipaddr_str(ts0, ipda));
+        dbgmsg(WARN, nopkt, "ARP failed - (%u) %s is not in any subnet",
+            pkt.rdidx, rt_ipaddr_str(ts0, ipda));
         rt_pkt_discard(pkt);
         return;
     }
     if ((srt->flags & RT_LPM_F_SUBNET) == 0) {
-        dbgmsg(WARN, nopkt, "ARP failed - route for %s is not a subnet",
-            rt_ipaddr_str(ts0, ipda));
+        dbgmsg(WARN, nopkt, "ARP failed - route for (%u) %s is not a subnet",
+            pkt.rdidx, rt_ipaddr_str(ts0, ipda));
         rt_pkt_discard(pkt);
         return;
     }
     ap.s_ip_addr = srt->ifipa;
-    #else
-    ap.s_ip_addr = pi->ipaddr;
-    #endif
     /* Target Info */
     memset(&ap.t_hw_addr, 0, sizeof(ap.t_hw_addr));
     ap.t_ip_addr = ipda;
     rt_arp_pkt_hton(&ap, buf);
 
-    dbgmsg(INFO, pkt, "ARP generated ARP (%u) %s",
-        pkt.rdidx, rt_ipaddr_nr_str(ipda));
+    dbgmsg(INFO, pkt, "ARP generated for (%u) %s on port %u",
+        pkt.rdidx, rt_ipaddr_nr_str(ipda), pi->idx);
 
     rt_pkt_set_length(pkt, 14 + sizeof(rt_pkt_arp_t));
     rt_pkt_send(pkt, pi);

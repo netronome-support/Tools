@@ -35,49 +35,27 @@ rt_pkt_ipv4_local_process (rt_pkt_t pkt)
     rt_pkt_discard(pkt);
 }
 
-rt_lpm_t *
-rt_resolve_nexthop (rt_rd_t rdidx, rt_ipv4_addr_t nhipa)
+void
+rt_pkt_setup_dt (rt_port_info_t *i_pi, rt_ipv4_addr_t ipda,
+    rt_lpm_t *rt, rt_ipv4_ar_t *ar)
 {
-    /* Lookup route for the NextHop */
-    rt_lpm_t *nhr = rt_lpm_lookup(rdidx, nhipa);
-    if (nhr == NULL) {
-        dbgmsg(WARN, nopkt, "No route for next-hop (%u) %s",
-            rdidx, rt_ipaddr_nr_str(nhipa));
-        return NULL;
+    /* Egress Port Info */
+    rt_port_info_t *e_pi = rt->pi;
+    /* Create Direct-Table Entry */
+    rt_dt_route_t dt;
+    memset(&dt, 0, sizeof(dt));
+    dt.key.prtidx = i_pi->idx;
+    dt.key.ipaddr = ipda;
+    dt.pi = e_pi;
+    dt.port = e_pi->idx;
+    dt.flags = rt->flags & RT_FWD_F_MASK;
+    dt.tx_buffer = e_pi->tx_buffer;
+    memcpy(dt.key.hwaddr, i_pi->hwaddr, 6);
+    if (ar != NULL) {
+        memcpy(dt.eth.dst, ar->hwaddr, 6);
     }
-
-    uint32_t nh_flags = nhr->flags;
-    if (nh_flags & RT_LPM_F_LOCAL) {
-        dbgmsg(WARN, nopkt, "Next-hop (%u) %s points at local address ",
-            rdidx, rt_ipaddr_nr_str(nhipa));
-        return NULL;
-    }
-    if ((nh_flags & RT_LPM_F_HAS_NEXTHOP) || (nhr->nh != NULL)) {
-        dbgmsg(WARN, nopkt, "Nested next-hops not supported for (%u) %s",
-            rdidx, rt_ipaddr_nr_str(nhipa));
-        return NULL;
-    }
-    if (!(nh_flags & RT_LPM_F_HAS_PORTINFO)) {
-        dbgmsg(WARN, nopkt, "Next-hops (%u) %s is missing port-info",
-            rdidx, rt_ipaddr_nr_str(nhipa));
-        return NULL;
-    }
-
-    if (!rt_lpm_is_host_route(nhr)) {
-        /* Create (or find) host route */
-        dbgmsg(INFO, nopkt, "Create host route (%u) %s",
-            rdidx, rt_ipaddr_nr_str(nhipa));
-        nhr = rt_lpm_add_nexthop(rdidx, nhipa);
-        nh_flags = nhr->flags;
-    }
-
-    if (!(nh_flags & RT_LPM_F_IS_NEXTHOP))
-        nhr->flags |= RT_LPM_F_IS_NEXTHOP;
-
-    dbgmsg(INFO, nopkt, "Resolved nexthop (%u) %s",
-        rdidx, rt_ipaddr_nr_str(nhipa));
-
-    return nhr;
+    memcpy(dt.eth.src, e_pi->hwaddr, 6);
+    rt_dt_create(&dt);
 }
 
 void
@@ -101,9 +79,9 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
         return;
     }
 
-    if (rt_flags & RT_DT_F_DISCARD) {
+    if (rt_flags & RT_FWD_F_DISCARD) {
         if (pkt.pi != NULL) {
-            rt_dt_create(pkt.rdidx, ipda, rt, NULL, rt_flags);
+            rt_pkt_setup_dt(pkt.pi, ipda, rt, NULL);
         }
         rt_pkt_discard(pkt);
         return;
@@ -128,15 +106,13 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
     }
 
     rt_ipv4_ar_t *ar = rt_ipv4_ar_lookup(rt->pi, nhipa);
-    if (ar == NULL) {
-        char ts[32];
-        dbgmsg(INFO, pkt, "Generate ARP for (%u) %s",
-            rdidx, rt_ipaddr_str(ts, nhipa));
+    if ((ar == NULL) || (!(ar->flags & RT_AR_F_HAS_HWADDR))) {
         rt_arp_generate(pkt, nhipa, rt);
         return;
     }
 
-    rt_dt_create(rdidx, ipda, rt, ar, 0);
+    /* Create Direct-Table Entry */
+    rt_pkt_setup_dt(pkt.pi, ipda, rt, ar);
 
     /* Update the MAC addresses */
     rt_pkt_set_hw_addrs(pkt, rt->pi, ar->hwaddr);
@@ -145,26 +121,8 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 }
 
 static inline void
-rt_pkt_ipv4_process (rt_pkt_t pkt)
+rt_pkt_ipv4_process (rt_pkt_t pkt, rt_ipv4_addr_t ipda)
 {
-    rt_ipv4_addr_t ipda = ntohl(*PTR(pkt.pp.l3, uint32_t, 16));
-    /* Look-up in Direct (fast) Table */
-    rt_dt_route_t *drp = rt_dt_lookup(pkt.rdidx, ipda);
-    if (likely(drp != NULL)) {
-        if (unlikely(drp->flags)) {
-            if (drp->flags & RT_DT_F_DISCARD) {
-                rt_pkt_discard(pkt);
-                return;
-            }
-        }
-        /* Update MAC addresses */
-        memcpy(&pkt.eth->dst, drp->eth.dst, 6);
-        memcpy(&pkt.eth->src, &drp->eth.src, 6);
-        /* Send Packet */
-        rt_pkt_send_fast(pkt, drp->port);
-        return;
-    }
-
     if ((ipda >> 28) == 0xf) {
         /* Multicast */
         rt_pkt_ipv4_local_process(pkt);
@@ -192,15 +150,40 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
     uint16_t ethtype = ntohs(pkt.eth->ethtype);
 
     pkt.pp.l3 = PTR(pkt.eth, void, 14);
+    rt_ipv4_addr_t ipda = ntohl(*PTR(pkt.pp.l3, uint32_t, 16));
 
-    /* Compare Destination MAC address */
-    if ((pkt.eth->dst[0] & 1) == 0) {
-        /* Unicast */
+    /* Look-up in Direct (fast) Table */
+    if (likely(ethtype == 0x0800)) {
+        rt_dt_key_t dt_key;
+        dt_key.prtidx = port;
+        dt_key.ipaddr = ipda;
+        memcpy(dt_key.hwaddr, pkt.eth->dst, 6);
+        rt_dt_route_t *drp = rt_dt_lookup(&dt_key);
+        if (likely(drp != NULL)) {
+            if (unlikely(drp->flags)) {
+                if (drp->flags & RT_FWD_F_DISCARD) {
+                    rt_pkt_discard(pkt);
+                    return;
+                }
+                if (drp->flags & RT_FWD_F_RANDDISC) {
+                }
+            }
+            /* Update MAC addresses */
+            memcpy(&pkt.eth->dst, drp->eth.dst, 6);
+            memcpy(&pkt.eth->src, drp->eth.src, 6);
+            /* Send Packet */
+            rt_pkt_send_fast(pkt, drp->port);
+            return;
+        }
+    }
+
+    if (likely((pkt.eth->dst[0] & 1) == 0)) {
+        /* Unicast - Compare Destination MAC address */
         if (rt_eth_addr_compare(&pkt.eth->dst, &pkt.pi->hwaddr)
                 || (pkt.pi->flags & RT_PORT_F_PROMISC)) {
             /* Check for IPv4 */
-            if (ethtype == 0x0800) {
-                rt_pkt_ipv4_process(pkt);
+            if (likely(ethtype == 0x0800)) {
+                rt_pkt_ipv4_process(pkt, ipda);
                 return;
             } else
             if (ethtype == 0x0806) {
@@ -217,7 +200,7 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
     } else {
         /* Broadcast or Multicast */
         if (ethtype == 0x0800) {
-            rt_pkt_ipv4_process(pkt);
+            rt_pkt_ipv4_process(pkt, ipda);
             return;
         } else
         if (ethtype == 0x0806) {
