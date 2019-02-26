@@ -34,6 +34,7 @@ typedef struct {
     /* mask of enabled ports */
     uint32_t rt_enabled_port_mask;
     int rx_queue_per_lcore;
+    uint64_t rand_disc_level;
 } rt_global_t;
 
 extern rt_global_t g;

@@ -140,20 +140,22 @@ rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 {
     rt_rd_t rdidx = pkt.rdidx;
     rt_pkt_discard(pkt);
+    const char *optstr = "";
+
+    rt_lpm_t *rt = rt_lpm_lookup_subnet(rdidx, ap.s_ip_addr);
+    if (rt == NULL) {
+        optstr = " - not on a subnet!";
+    }
 
     char t0[32], t1[32], t2[32];
-    dbgmsg(INFO, pkt, "ARP reply received from %s (%s) (local: (%u) %s)",
+    dbgmsg(INFO, pkt, "ARP reply received from %s (%s) (local: (%u) %s)%s",
         rt_ipaddr_str(t0, ap.s_ip_addr),
         rt_hwaddr_str(t1, ap.s_hw_addr), rdidx,
-        rt_ipaddr_str(t2, ap.t_ip_addr));
+        rt_ipaddr_str(t2, ap.t_ip_addr),
+        optstr);
 
-    rt_lpm_t *rt = rt_lpm_lookup(rdidx, ap.s_ip_addr);
-    if (rt == NULL) {
-        char ts[32];
-        dbgmsg(INFO, pkt, "no route for received ARP (%d: %s)",
-            rdidx, rt_ipaddr_str(ts, ap.s_ip_addr));
+    if (rt == NULL)
         return;
-    }
 
     rt_ipv4_ar_t *ar = rt_ipv4_ar_learn(pkt.pi, ap.s_ip_addr, ap.s_hw_addr);
     rt_ar_flush_packet(ar);
@@ -222,16 +224,10 @@ rt_arp_send_request (rt_pkt_t pkt, rt_port_info_t *pi,
     /* Sender Info */
     memcpy(&ap.s_hw_addr, &pi->hwaddr, 6);
     /* Locate local IP address from route table */
-    rt_lpm_t *srt = rt_lpm_lookup(pi->rdidx, ipda);
-    char ts0[32];
+    rt_lpm_t *srt = rt_lpm_lookup_subnet(pi->rdidx, ipda);
     if (srt == NULL) {
+        char ts0[32];
         dbgmsg(WARN, nopkt, "ARP failed - (%u) %s is not in any subnet",
-            pkt.rdidx, rt_ipaddr_str(ts0, ipda));
-        rt_pkt_discard(pkt);
-        return;
-    }
-    if ((srt->flags & RT_LPM_F_SUBNET) == 0) {
-        dbgmsg(WARN, nopkt, "ARP failed - route for (%u) %s is not a subnet",
             pkt.rdidx, rt_ipaddr_str(ts0, ipda));
         rt_pkt_discard(pkt);
         return;

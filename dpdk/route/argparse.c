@@ -151,14 +151,14 @@ parse_iface_addr (const char *arg)
 static int
 parse_ipv4_route (const char *arg)
 {
-    /* Format: [<rdidx>#]<IPv4 addr>/<prefix length>@[<rdidx>#]<next hop IPv4 addr> */
+    /* Format: [<rdidx>#]<IPv4 addr>/<prefix length>@[<rdidx>#]<next hop IPv4 addr>[!<option>] */
     int rc;
     char argstr[128];
     strncpy(argstr, arg, 127);
     int rdidx = RT_RD_DEFAULT;
     int nh_rdidx;
     int plen = 32;
-    uint32_t nh_flags = 0;
+    uint32_t rt_flags = 0;
     char *at = index(argstr, '@');
     if (at == NULL) {
         fprintf(stderr, "ERROR: could not parse route '%s'.\n",
@@ -187,8 +187,17 @@ parse_ipv4_route (const char *arg)
         return -1;
     }
     /* Parse next-hop (after @) */
-    const char *sp_nexthop = &at[1];
-    const char *sp_numch = index(sp_nexthop, '#');
+    char *sp_nexthop = &at[1];
+    char *cp_exclam;
+    while ((cp_exclam = rindex(sp_nexthop, '!')) != NULL) {
+        const char *sp_option = &cp_exclam[1];
+        *cp_exclam = 0;
+        if (strcasecmp(sp_option, "randdisc") == 0) {
+            rt_flags |= RT_FWD_F_RANDDISC;
+            continue;
+        }
+    }
+    char *sp_numch = index(sp_nexthop, '#');
     if (sp_numch != NULL) {
         nh_rdidx = strtol(sp_nexthop, NULL, 10);
         printf("PARSE %d\n", nh_rdidx);
@@ -200,7 +209,7 @@ parse_ipv4_route (const char *arg)
         (strcasecmp(sp_nexthop, "discard") == 0) ||
         (strcasecmp(sp_nexthop, "blackhole") == 0)) {
         nhipa = 0; /* Blackhole */
-        nh_flags |= RT_FWD_F_DISCARD;
+        rt_flags |= RT_FWD_F_DISCARD;
     } else {
         rc = inet_pton(AF_INET, sp_nexthop, &nhipa);
         if (rc != 1) {
@@ -208,11 +217,14 @@ parse_ipv4_route (const char *arg)
                 " IP address '%s'.\n", arg);
             return -1;
         }
-        nh_flags |= RT_LPM_F_HAS_NEXTHOP;
+        rt_flags |= RT_LPM_F_HAS_NEXTHOP;
     }
 
-    rt_lpm_route_create(rdidx, ntohl(ipaddr), plen,
-        nh_flags, ntohl(nhipa), nh_rdidx);
+    rt_lpm_t *rt = rt_lpm_route_create(rdidx, ntohl(ipaddr), plen,
+        rt_flags, ntohl(nhipa), nh_rdidx);
+
+    if (rt == NULL)
+        return -1;
 
     char t0[32], t1[32];
     dbgmsg(CONF, nopkt, "Route (%u) %s/%u -> (%u) %s",
@@ -477,6 +489,16 @@ rt_parse_timer_period (const char *q_arg)
     return n;
 }
 
+static int
+rt_parse_random_discard_level (const char *arg)
+{
+    double percent = strtod(arg, NULL);
+    if ((percent < 0.0) || (percent > 100.0))
+        return -1;
+    g.rand_disc_level = (uint64_t) (((double) INT_MAX) * percent / 100.0);
+    return 0;
+}
+
 /* Parse the argument given in the command line of the application */
 int
 rt_parse_args (int argc, char **argv)
@@ -494,6 +516,7 @@ rt_parse_args (int argc, char **argv)
         { "log-level", required_argument, NULL, 1006},
         { "pin", required_argument, NULL, 1007},
         { "add-iface-addr", required_argument, NULL, 1008},
+        { "rand-disc-level", required_argument, NULL, 1009},
         { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
         { "no-statistics", no_argument, &g.print_statistics, 0},
         { "ping-nexthops", no_argument, &g.ping_nexthops, 1},
@@ -568,6 +591,10 @@ rt_parse_args (int argc, char **argv)
 
         case 1008: /* --add-iface-addr */
             rc = parse_add_iface_addr(optarg);
+            break;
+
+        case 1009: /* --rand-disc-level */
+            rc = rt_parse_random_discard_level(optarg);
             break;
 
         /* long options */

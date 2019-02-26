@@ -48,6 +48,10 @@ Command Line Arguments (beyond what l2fwd supports):
 
     Assign a port to logical cores (0..)
 
+ --rand-disc-level <percent>
+
+    Discard rate for RANDDISC routes.
+
  --ping-nexthops
 
     Regularly (once per second) ping all route nexthops.

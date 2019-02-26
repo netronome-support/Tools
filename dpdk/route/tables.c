@@ -178,6 +178,23 @@ rt_lpm_lookup (rt_rd_t rdidx, rt_ipv4_addr_t addr)
 }
 
 rt_lpm_t *
+rt_lpm_lookup_subnet (rt_rd_t rdidx, rt_ipv4_addr_t addr)
+{
+    rt_lpm_t *p;
+
+    for (p = rt_db_home.prev ; p != &rt_db_home ; p = p->prev) {
+        if (p->rdidx != rdidx)
+            continue;
+        if ((p->flags & RT_LPM_F_SUBNET) == 0)
+            continue;
+        if ( ( (addr ^ p->prefix.addr ) & rt_ipv4_mask(p->prefix.len) ) == 0 ) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+rt_lpm_t *
 rt_lpm_find_or_create (rt_rd_t rdidx, rt_ipv4_prefix_t prefix,
     rt_port_info_t *pi)
 {
@@ -227,6 +244,14 @@ rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
     rt_lpm_t *rt = rt_lpm_find_or_create(rdidx, prefix, NULL);
     assert(rt != NULL);
     rt->nhipa = nhipa;
+    rt_lpm_t *srp = rt_lpm_lookup_subnet(rdidx, nhipa);
+    if (srp == NULL) {
+        char ts[32];
+        fprintf(stderr, "ERROR: can not create route with NHIPA %s\n",
+            rt_ipaddr_str(ts, nhipa));
+        return NULL;
+    }
+    rt->pi = srp->pi;
     rt->nh_rdidx = nh_rdidx;
     rt->flags |= flags;
     return rt;

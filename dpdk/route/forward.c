@@ -98,6 +98,7 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
     } else
     if (rt_flags & RT_LPM_F_HAS_NEXTHOP) {
         nhipa = rt->nhipa;
+        assert(rt->pi != NULL);
     } else {
         dbgmsg(WARN, pkt, "What is this (%u) %s",
             rdidx, rt_ipaddr_nr_str(ipda));
@@ -166,6 +167,11 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
                     return;
                 }
                 if (drp->flags & RT_FWD_F_RANDDISC) {
+                    uint64_t rnd = (uint64_t) (uint32_t) rte_rand();
+                    if (rnd < g.rand_disc_level) {
+                        rt_pkt_discard(pkt);
+                        return;
+                    }
                 }
             }
             /* Update MAC addresses */

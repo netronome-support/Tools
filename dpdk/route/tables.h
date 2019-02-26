@@ -143,6 +143,7 @@ void rt_dt_dump (FILE *fd);
 /**********************************************************************/
 
 rt_lpm_t *rt_lpm_lookup (rt_rd_t rdidx, rt_ipv4_addr_t addr);
+rt_lpm_t *rt_lpm_lookup_subnet (rt_rd_t rdidx, rt_ipv4_addr_t addr);
 rt_lpm_t *rt_lpm_find_or_create (rt_rd_t rdidx,
     rt_ipv4_prefix_t prefix, rt_port_info_t *pi);
 rt_lpm_t *rt_lpm_route_create (rt_rd_t rdidx, rt_ipv4_addr_t ipaddr, int plen,
