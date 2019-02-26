@@ -1,6 +1,8 @@
 #include <strings.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <arpa/inet.h>
+#include <getopt.h>
 
 #include "defines.h"
 #include "port.h"
@@ -64,7 +66,7 @@ parse_options (char *optstr, uint64_t *flags, opt_syntax_t *osp)
     return 0;
 }
 
-int
+static int
 parse_iface_addr (const char *arg)
 {
     /* Format: <portid>:[<domain>#][<ipv4 addr>[/<prefix length>]] */
@@ -146,7 +148,7 @@ parse_iface_addr (const char *arg)
     return -1;
 }
 
-int
+static int
 parse_ipv4_route (const char *arg)
 {
     /* Format: [<rdidx>#]<IPv4 addr>/<prefix length>@[<rdidx>#]<next hop IPv4 addr> */
@@ -220,7 +222,7 @@ parse_ipv4_route (const char *arg)
     return 0;
 }
 
-int
+static int
 parse_add_iface_addr (const char *arg)
 {
     /* Format: <portid>:<ipv4 addr> */
@@ -268,7 +270,7 @@ parse_add_iface_addr (const char *arg)
     return -1;
 }
 
-int
+static int
 port_set_promisc_flag (const char *argstr)
 {
     int prtidx = strtol(argstr, NULL, 10);
@@ -315,7 +317,7 @@ parse_hwaddr (const char *str, uint8_t *hwaddr)
     return 0;
 }
 
-int
+static int
 add_static_arp_entry (const char *argstr)
 {
     /* Format: [<rdidx>#]<IPv4 addr>@<next hop MAC addr> */
@@ -371,7 +373,7 @@ add_static_arp_entry (const char *argstr)
     return -1;
 }
 
-int
+static int
 parse_port_pinning (const char *arg)
 {
     // Format: --pin 1:1,2 --pin <port>:<rx lcore>,<tx lcore>
@@ -407,4 +409,183 @@ parse_port_pinning (const char *arg)
   ParseError:
     fprintf(stderr, "ERROR: could not parse '%s'\n", arg);
     return -1;
+}
+
+/* display usage */
+static void
+rt_usage (const char *prgname)
+{
+    printf("%s [EAL options] -- -p PORTMASK [-q NQ]\n"
+           "  -p PORTMASK: hexadecimal bitmask of ports to configure\n"
+           "  -q NQ: number of queue (=ports) per lcore (default is 1)\n"
+           "  -T PERIOD: statistics will be refreshed each PERIOD seconds (0 to disable, 10 default, 86400 maximum)\n"
+           "  --[no-]mac-updating: Enable or disable MAC addresses updating (enabled by default)\n"
+           "      When enabled:\n"
+           "       - The source MAC address is replaced by the TX port MAC address\n"
+           "       - The destination MAC address is replaced by 02:00:00:00:00:TX_PORT_ID\n",
+           prgname);
+}
+
+static int
+rt_parse_portmask (const char *portmask)
+{
+    char *end = NULL;
+    unsigned long pm;
+
+    /* parse hexadecimal string */
+    pm = strtoul(portmask, &end, 16);
+    if ((portmask[0] == '\0') || (end == NULL) || (*end != '\0'))
+        return -1;
+
+    if (pm == 0)
+        return -1;
+
+    return pm;
+}
+
+static unsigned int
+rt_parse_nqueue (const char *q_arg)
+{
+    char *end = NULL;
+    unsigned long n;
+
+    /* parse hexadecimal string */
+    n = strtoul(q_arg, &end, 10);
+    if ((q_arg[0] == '\0') || (end == NULL) || (*end != '\0'))
+        return 0;
+    if (n == 0)
+        return 0;
+    if (n >= MAX_RX_QUEUE_PER_LCORE)
+        return 0;
+
+    return n;
+}
+
+static int
+rt_parse_timer_period (const char *q_arg)
+{
+    char *end = NULL;
+    int n;
+
+    /* parse number string */
+    n = strtol(q_arg, &end, 10);
+    if ((q_arg[0] == '\0') || (end == NULL) || (*end != '\0'))
+        return -1;
+    if (n >= MAX_TIMER_PERIOD)
+        return -1;
+
+    return n;
+}
+
+/* Parse the argument given in the command line of the application */
+int
+rt_parse_args (int argc, char **argv)
+{
+    int opt, ret, timer_secs;
+    char **argvopt;
+    int option_index;
+    char *prgname = argv[0];
+    static struct option lgopts[] = {
+        { "iface-addr", required_argument, NULL, 1001},
+        { "route", required_argument, NULL, 1002},
+        { "log-file", required_argument, NULL, 1003},
+        { "promisc", required_argument, NULL, 1004},
+        { "static", required_argument, NULL, 1005},
+        { "log-level", required_argument, NULL, 1006},
+        { "pin", required_argument, NULL, 1007},
+        { "add-iface-addr", required_argument, NULL, 1008},
+        { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
+        { "no-statistics", no_argument, &g.print_statistics, 0},
+        { "ping-nexthops", no_argument, &g.ping_nexthops, 1},
+        { NULL, 0, 0, 0}
+    };
+
+    argvopt = argv;
+
+    while ((opt = getopt_long(argc, argvopt, "p:q:T:",
+            lgopts, &option_index)) != EOF) {
+
+        int rc = 0;
+        switch (opt) {
+        /* portmask */
+        case 'p':
+            g.rt_enabled_port_mask = rt_parse_portmask(optarg);
+            if (g.rt_enabled_port_mask == 0) {
+                printf("invalid portmask\n");
+                rt_usage(prgname);
+                return -1;
+            }
+            break;
+
+        /* nqueue */
+        case 'q':
+            g.rx_queue_per_lcore = rt_parse_nqueue(optarg);
+            if (g.rx_queue_per_lcore == 0) {
+                printf("invalid queue number\n");
+                rt_usage(prgname);
+                return -1;
+            }
+            break;
+
+        /* timer period */
+        case 'T':
+            timer_secs = rt_parse_timer_period(optarg);
+            if (timer_secs < 0) {
+                printf("invalid timer period\n");
+                rt_usage(prgname);
+                return -1;
+            }
+            g.timer_period = timer_secs;
+            break;
+
+        case 1001:
+            rc = parse_iface_addr(optarg);
+            break;
+
+        case 1002:
+            rc = parse_ipv4_route(optarg);
+            break;
+
+        case 1003:
+            rc = dbgmsg_fopen(optarg);
+            break;
+
+        case 1004:
+            rc = port_set_promisc_flag(optarg);
+            break;
+
+        case 1005:
+            rc = add_static_arp_entry(optarg);
+            break;
+
+        case 1006: /* --log-level */
+            dbgmsg_globals.log_level = strtol(optarg, NULL, 10);
+            break;
+
+        case 1007: /* --pin */
+            rc = parse_port_pinning(optarg);
+            break;
+
+        case 1008: /* --add-iface-addr */
+            rc = parse_add_iface_addr(optarg);
+            break;
+
+        /* long options */
+        case 0:
+            break;
+
+        default:
+            rt_usage(prgname);
+            return -1;
+        }
+        if (rc < 0)
+            return -1;
+    }
+
+    if (optind >= 0)
+        argv[optind-1] = prgname;
+
+    ret = optind - 1;
+    optind = 0; /* reset getopt lib */
+    return ret;
 }

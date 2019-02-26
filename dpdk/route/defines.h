@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #define min(a,b) (((a) < (b)) ? (a) : (b))
@@ -23,5 +24,32 @@ typedef struct {
 
 /* Routing Domain Index */
 typedef uint16_t rt_rd_t;
+
+/* Global Variables */
+typedef struct {
+    int ping_nexthops;
+    int print_statistics;
+    /* A tsc-based timer responsible for triggering statistics printout */
+    uint64_t timer_period;
+    /* mask of enabled ports */
+    uint32_t rt_enabled_port_mask;
+    int rx_queue_per_lcore;
+} rt_global_t;
+
+extern rt_global_t g;
+
+static inline void
+rt_global_init (void)
+{
+    memset(&g, 0, sizeof(g));
+    g.print_statistics = 1;
+    g.timer_period = 2; /* default period is 10 seconds */
+    g.rx_queue_per_lcore = 1;
+}
+
+#define MAX_RX_QUEUE_PER_LCORE 16
+#define MAX_TX_QUEUE_PER_PORT 16
+
+#define MAX_TIMER_PERIOD 86400 /* 1 day max */
 
 #endif

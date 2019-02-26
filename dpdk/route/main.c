@@ -76,12 +76,9 @@
 #include "dbgmsg.h"
 #include "rings.h"
 
+rt_global_t g;
+
 static volatile bool force_quit;
-
-/* Print statistics enabled by default */
-static int print_statistics = 1;
-
-static int ping_nexthops = 0;
 
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
@@ -102,15 +99,8 @@ static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 /* ethernet addresses of ports */
 static struct ether_addr rt_ports_eth_addr[RTE_MAX_ETHPORTS];
 
-/* mask of enabled ports */
-static uint32_t rt_enabled_port_mask = 0;
-
-static unsigned int rt_rx_queue_per_lcore = 1;
-
 tx_ring_set_t *grs = NULL;
 
-#define MAX_RX_QUEUE_PER_LCORE 16
-#define MAX_TX_QUEUE_PER_PORT 16
 struct lcore_queue_conf {
     unsigned n_rx_port;
     unsigned rx_port_list[MAX_RX_QUEUE_PER_LCORE];
@@ -153,10 +143,6 @@ struct rt_port_statistics {
     struct load_statistics ls, prev;
 } __rte_cache_aligned;
 struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
-
-#define MAX_TIMER_PERIOD 86400 /* 1 day max */
-/* A tsc-based timer responsible for triggering statistics printout */
-static uint64_t timer_period = 2; /* default period is 10 seconds */
 
 static inline void
 update_load_statistics (int portid, int rx_pkt_cnt)
@@ -208,7 +194,7 @@ print_load_statistics (int portid)
 
 /* Print out statistics on packets dropped */
 static void
-print_stats(void)
+print_stats (void)
 {
     uint64_t total_packets_dropped, total_packets_tx, total_packets_rx;
     unsigned portid;
@@ -227,7 +213,7 @@ print_stats(void)
 
     for (portid = 0; portid < RTE_MAX_ETHPORTS; portid++) {
         /* skip disabled ports */
-        if ((rt_enabled_port_mask & (1 << portid)) == 0)
+        if ((g.rt_enabled_port_mask & (1 << portid)) == 0)
             continue;
         printf("\nStatistics for port %u ------------------------------"
                "\nPackets sent: %24"PRIu64
@@ -292,22 +278,22 @@ rt_main_loop (void)
         if (unlikely(diff_tsc > drain_tsc)) {
 
             /* if timer is enabled */
-            if (timer_period > 0) {
+            if (g.timer_period > 0) {
 
                 /* advance the timer */
                 timer_tsc += diff_tsc;
 
                 /* if timer has reached its timeout */
-                if (unlikely(timer_tsc >= timer_period)) {
+                if (unlikely(timer_tsc >= g.timer_period)) {
 
                     /* do this only on master core */
                     if (lcore_id == rte_get_master_lcore()) {
                         rt_dhcp_discover();
 
-                        if (print_statistics) {
+                        if (g.print_statistics) {
                             print_stats();
                         }
-                        if (ping_nexthops) {
+                        if (g.ping_nexthops) {
                             rt_lpm_gen_icmp_requests();
                         }
 
@@ -354,185 +340,6 @@ rt_launch_one_lcore (__attribute__((unused)) void *dummy)
 {
     rt_main_loop();
     return 0;
-}
-
-/* display usage */
-static void
-rt_usage(const char *prgname)
-{
-    printf("%s [EAL options] -- -p PORTMASK [-q NQ]\n"
-           "  -p PORTMASK: hexadecimal bitmask of ports to configure\n"
-           "  -q NQ: number of queue (=ports) per lcore (default is 1)\n"
-           "  -T PERIOD: statistics will be refreshed each PERIOD seconds (0 to disable, 10 default, 86400 maximum)\n"
-           "  --[no-]mac-updating: Enable or disable MAC addresses updating (enabled by default)\n"
-           "      When enabled:\n"
-           "       - The source MAC address is replaced by the TX port MAC address\n"
-           "       - The destination MAC address is replaced by 02:00:00:00:00:TX_PORT_ID\n",
-           prgname);
-}
-
-static int
-rt_parse_portmask (const char *portmask)
-{
-    char *end = NULL;
-    unsigned long pm;
-
-    /* parse hexadecimal string */
-    pm = strtoul(portmask, &end, 16);
-    if ((portmask[0] == '\0') || (end == NULL) || (*end != '\0'))
-        return -1;
-
-    if (pm == 0)
-        return -1;
-
-    return pm;
-}
-
-static unsigned int
-rt_parse_nqueue (const char *q_arg)
-{
-    char *end = NULL;
-    unsigned long n;
-
-    /* parse hexadecimal string */
-    n = strtoul(q_arg, &end, 10);
-    if ((q_arg[0] == '\0') || (end == NULL) || (*end != '\0'))
-        return 0;
-    if (n == 0)
-        return 0;
-    if (n >= MAX_RX_QUEUE_PER_LCORE)
-        return 0;
-
-    return n;
-}
-
-static int
-rt_parse_timer_period (const char *q_arg)
-{
-    char *end = NULL;
-    int n;
-
-    /* parse number string */
-    n = strtol(q_arg, &end, 10);
-    if ((q_arg[0] == '\0') || (end == NULL) || (*end != '\0'))
-        return -1;
-    if (n >= MAX_TIMER_PERIOD)
-        return -1;
-
-    return n;
-}
-
-/* Parse the argument given in the command line of the application */
-static int
-rt_parse_args (int argc, char **argv)
-{
-    int opt, ret, timer_secs;
-    char **argvopt;
-    int option_index;
-    char *prgname = argv[0];
-    static struct option lgopts[] = {
-        { "iface-addr", required_argument, NULL, 1001},
-        { "route", required_argument, NULL, 1002},
-        { "log-file", required_argument, NULL, 1003},
-        { "promisc", required_argument, NULL, 1004},
-        { "static", required_argument, NULL, 1005},
-        { "log-level", required_argument, NULL, 1006},
-        { "pin", required_argument, NULL, 1007},
-        { "add-iface-addr", required_argument, NULL, 1008},
-        { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
-        { "no-statistics", no_argument, &print_statistics, 0},
-        { "ping-nexthops", no_argument, &ping_nexthops, 1},
-        { NULL, 0, 0, 0}
-    };
-
-    argvopt = argv;
-
-    while ((opt = getopt_long(argc, argvopt, "p:q:T:",
-            lgopts, &option_index)) != EOF) {
-
-        int rc = 0;
-        switch (opt) {
-        /* portmask */
-        case 'p':
-            rt_enabled_port_mask = rt_parse_portmask(optarg);
-            if (rt_enabled_port_mask == 0) {
-                printf("invalid portmask\n");
-                rt_usage(prgname);
-                return -1;
-            }
-            break;
-
-        /* nqueue */
-        case 'q':
-            rt_rx_queue_per_lcore = rt_parse_nqueue(optarg);
-            if (rt_rx_queue_per_lcore == 0) {
-                printf("invalid queue number\n");
-                rt_usage(prgname);
-                return -1;
-            }
-            break;
-
-        /* timer period */
-        case 'T':
-            timer_secs = rt_parse_timer_period(optarg);
-            if (timer_secs < 0) {
-                printf("invalid timer period\n");
-                rt_usage(prgname);
-                return -1;
-            }
-            timer_period = timer_secs;
-            break;
-
-        case 1001:
-            rc = parse_iface_addr(optarg);
-            break;
-
-        case 1002:
-            rc = parse_ipv4_route(optarg);
-            break;
-
-        case 1003:
-            rc = dbgmsg_fopen(optarg);
-            break;
-
-        case 1004:
-            rc = port_set_promisc_flag(optarg);
-            break;
-
-        case 1005:
-            rc = add_static_arp_entry(optarg);
-            break;
-
-        case 1006: /* --log-level */
-            dbgmsg_globals.log_level = strtol(optarg, NULL, 10);
-            break;
-
-        case 1007: /* --pin */
-            rc = parse_port_pinning(optarg);
-            break;
-
-        case 1008: /* --add-iface-addr */
-            rc = parse_add_iface_addr(optarg);
-            break;
-
-        /* long options */
-        case 0:
-            break;
-
-        default:
-            rt_usage(prgname);
-            return -1;
-        }
-        if (rc < 0)
-            return -1;
-    }
-
-    if (optind >= 0)
-        argv[optind-1] = prgname;
-
-    ret = optind - 1;
-    optind = 0; /* reset getopt lib */
-    return ret;
 }
 
 /* Check the link status of all ports in up to 9s, and print them finally */
@@ -625,6 +432,7 @@ main (int argc, char **argv)
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
+    rt_global_init();
     dbgmsg_init();
     rt_lpm_table_init();
     rt_dt_init ();
@@ -638,7 +446,7 @@ main (int argc, char **argv)
         rte_exit(EXIT_FAILURE, "Invalid ROUTE arguments\n");
 
     /* convert to number of cycles */
-    timer_period *= rte_get_timer_hz();
+    g.timer_period *= rte_get_timer_hz();
 
     nb_ports = rte_eth_dev_count();
     if (nb_ports == 0)
@@ -649,7 +457,7 @@ main (int argc, char **argv)
      */
     for (portid = 0; portid < nb_ports; portid++) {
         /* skip ports that are not enabled */
-        if ((rt_enabled_port_mask & (1 << portid)) == 0)
+        if ((g.rt_enabled_port_mask & (1 << portid)) == 0)
             continue;
 
         nb_ports_in_mask++;
@@ -672,17 +480,17 @@ main (int argc, char **argv)
     grs = create_global_ring_set(nb_ports);
 
     rt_lcore_default_assign(RT_PORT_DIR_RX, nb_ports,
-        rt_enabled_port_mask);
+        g.rt_enabled_port_mask);
 
     rt_lcore_default_assign(RT_PORT_DIR_TX, nb_ports,
-        rt_enabled_port_mask);
+        g.rt_enabled_port_mask);
 
-    log_port_lcore_assignment(rt_enabled_port_mask);
+    log_port_lcore_assignment(g.rt_enabled_port_mask);
 
     /* Initialise each port */
     for (portid = 0; portid < nb_ports; portid++) {
         /* skip ports that are not enabled */
-        if ((rt_enabled_port_mask & (1 << portid)) == 0) {
+        if ((g.rt_enabled_port_mask & (1 << portid)) == 0) {
             printf("Skipping disabled port %u\n", (unsigned) portid);
             nb_ports_available--;
             continue;
@@ -753,7 +561,7 @@ main (int argc, char **argv)
             "All available ports are disabled. Please set portmask.\n");
     }
 
-    check_all_ports_link_status(nb_ports, rt_enabled_port_mask);
+    check_all_ports_link_status(nb_ports, g.rt_enabled_port_mask);
 
     ret = 0;
     /* launch per-lcore init on every lcore */
@@ -766,7 +574,7 @@ main (int argc, char **argv)
     }
 
     for (portid = 0; portid < nb_ports; portid++) {
-        if ((rt_enabled_port_mask & (1 << portid)) == 0)
+        if ((g.rt_enabled_port_mask & (1 << portid)) == 0)
             continue;
         printf("Closing port %d...", portid);
         rte_eth_dev_stop(portid);
