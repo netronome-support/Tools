@@ -16,8 +16,10 @@ Syntax: $toolname [<options>] [<PCI BDF> ...]
 Options:
   --help -h                     Print this help
   --verbose                     Print debug information
+  --dry-run                     Just specify what would have been done
   --verify                      Just verify (and report if mismatch)
   --driver -d <name>            Specify driver
+  --nfp-idx <idx>               Specify NFP device (0..)
   --nfp-vf-idx -i <idx>         Specify NFP VF by index
   --nfp-vf-idx -i <start>-<end> Specify a range of NFP VFs
   --pci-if-idx <idx>            Specify interface index from lspci list
@@ -58,6 +60,8 @@ re_index_range='^[0-9]+-[0-9]+$'
 re_pci_0="^${xd}{4}:${xd}{2}:${xd}{2}\.[0-7]\$"
 re_pci_1="^${xd}{2}:${xd}{2}\.[0-7]\$"
 ########################################################################
+: ${NFP_DEV_INDEX:=0}
+########################################################################
 param=""
 devlist=()
 vf_idx_list=()
@@ -68,7 +72,9 @@ for arg in "$@" ; do
         case "$arg" in
           "--help"|"-h") usage ; exit 0 ;;
           "--verbose")          optVerbose="yes" ;;
+          "--dry-run")          optDryRun="yes" ;;
           "--driver"|"-d")      param="driver" ;;
+          "--nfp-idx")          param="nfp-index" ;;
           "--nfp-vf-idx"|"-i")  param="vf-index" ;;
           "--pci-if-idx")       param="if-index" ;;
           "--verify")           optVerify="yes" ;;
@@ -85,6 +91,7 @@ for arg in "$@" ; do
     else
         case "$param" in
           "driver")             driver="$arg" ;;
+          "nfp-index")          NFP_DEV_INDEX="$arg" ;;
           "vf-index")           vf_idx_list+=( "$arg" ) ;;
           "if-index")           pci_if_list+=( "$arg" ) ;;
         esac
@@ -143,18 +150,24 @@ function add_nfp_vf_idx () {
     local pci_dev=$(( 8 + idx / 8 ))
     local pci_fnc=$(( idx % 8 ))
     printf -v pci_bdf "0000:%s:%02x.%u" "$nfpbus" $pci_dev $pci_fnc
-    verbose "translating VF index $idx to $pci_bdf"
+    verbose "Translating VF index $idx to $pci_bdf"
     devlist+=( "$pci_bdf" )
 }
 ########################################################################
 if [ ${#vf_idx_list[@]} -gt 0 ]; then
-    nfpbus=$(lspci -d 19ee: \
-        | head -1 \
+    nfp_pf_bus_list=( $(lspci -d 19ee: \
         | cut -d ' ' -f 1 \
-        | cut -d ':' -f 1 )
-    test "$nfpbus" != ""
+        | sed -rn 's/(:00\.0)$/\1/p' \
+        | cut -d ':' -f 1 ) )
+    test "${#nfp_pf_bus_list[@]}" -gt 0
         check_status "could not identify an NFP in the system"
-    verbose "Located NFP device at 0000:$nfpbus:00.0"
+    [[ "$NFP_DEV_INDEX" =~ $re_integer ]]
+        check_status "NFP index must be an integer ($NFP_DEV_INDEX)"
+    verbose "NFP device (bus) list: ${nfp_pf_bus_list[*]}"
+    nfpbus=${nfp_pf_bus_list[$NFP_DEV_INDEX]}
+    test "$nfpbus" != ""
+        check_status "no NFP[$NFP_DEV_INDEX] present in the system"
+    verbose "Selected NFP device at 0000:$nfpbus:00.0"
     for nfpidx in ${vf_idx_list[@]} ; do
         if [[ "$nfpidx" =~ $re_integer ]]; then
             test $nfpidx -lt 60
@@ -201,8 +214,12 @@ for pcibdf in ${devlist[@]} ; do
     fi
     if [ -d $devdir/driver ]; then
         verbose "[$pcibdf] unbinding"
-        echo "$pcibdf" > $devdir/driver/unbind
-            check_status "failed to unbind $bdf"
+        if [ "$optDryRun" != "" ]; then
+            echo "Would write '$pcibdf' to $devdir/driver/unbind"
+        else
+            echo "$pcibdf" > $devdir/driver/unbind
+                check_status "failed to unbind $bdf"
+        fi
     fi
     if [ "$driver" != "none" ]; then
         verbose "[$pcibdf] binding to $driver"
@@ -211,8 +228,13 @@ for pcibdf in ${devlist[@]} ; do
             check_status "access denied to $orfile"
         test -w $bindfile
             check_status "can not bind $pcibdf to $driver"
-        echo "$driver" > $orfile
-        echo "$pcibdf" > $bindfile
+        if [ "$optDryRun" != "" ]; then
+            echo "Would write '$driver' to $orfile"
+            echo "Would write '$pcibdf' to $bindfile"
+        else
+            echo "$driver" > $orfile
+            echo "$pcibdf" > $bindfile
+        fi
     fi
 done
 ########################################################################
