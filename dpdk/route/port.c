@@ -129,6 +129,25 @@ create_thread_rx_port_list (void)
     return pl;
 }
 
+int
+rt_port_check_lcores (uint32_t portmask)
+{
+    rt_port_index_t prtidx;
+    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+        if ((portmask & (1 << prtidx)) == 0)
+            continue;
+        int dir;
+        for (dir = RT_PORT_DIR_RX ; dir <= RT_PORT_DIR_TX ; dir++) {
+            uint16_t lcore = rt_port_query_lcore(prtidx, dir);
+            if (!rte_lcore_is_enabled(lcore)) {
+                fprintf(stderr, "ERROR: lcore %u is not enabled\n", lcore);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 void
 log_port_lcore_assignment (uint32_t portmask)
 {

@@ -237,7 +237,7 @@ parse_ipv4_route (const char *arg)
 static int
 parse_add_iface_addr (const char *arg)
 {
-    /* Format: <portid>:<ipv4 addr> */
+    /* Format: <portid>:<ipv4 addr>[/<prefix length>] */
     int rc;
     char tmpstr[128], *argstr = tmpstr, *endptr;
     const char *errmsg;
@@ -425,17 +425,29 @@ parse_port_pinning (const char *arg)
 
 /* display usage */
 static void
-rt_usage (const char *prgname)
+usage (const char *prgname)
 {
-    printf("%s [EAL options] -- -p PORTMASK [-q NQ]\n"
-           "  -p PORTMASK: hexadecimal bitmask of ports to configure\n"
-           "  -q NQ: number of queue (=ports) per lcore (default is 1)\n"
-           "  -T PERIOD: statistics will be refreshed each PERIOD seconds (0 to disable, 10 default, 86400 maximum)\n"
-           "  --[no-]mac-updating: Enable or disable MAC addresses updating (enabled by default)\n"
-           "      When enabled:\n"
-           "       - The source MAC address is replaced by the TX port MAC address\n"
-           "       - The destination MAC address is replaced by 02:00:00:00:00:TX_PORT_ID\n",
-           prgname);
+    printf("\n%s [<EAL options>] -- [<application options>]\n\n", prgname);
+    printf("Application Options:\n"
+"  -h --help                - print this help\n"
+"  --log-packets            - log packets in log file\n"
+"  --no-statistics          - do not print statistics\n"
+"  --ping-nexthops          - ping all route-nexthops\n"
+"  -p <port bitmask>        - hexadecimal bitmask of ports\n"
+"  -q <queue count>         - number of queue (=ports) per lcore (default is 1)\n"
+"  --iface-addr <portid>:[<domain>#][<ipv4 addr>[/<prefix length>]]\n"
+"                           - specify interface parameters\n"
+"  --static [<rdidx>#]<IPv4 addr>@<next hop MAC addr>\n"
+"                           - add static address resolution entry\n"
+"  --add-iface-addr <portid>:<ipv4 addr>[/<prefix length>]\n"
+"                           - add sub-interface to port\n"
+"  --route [<rdidx>#]<IPv4 addr>/<prefix length>@[<rdidx>#]<next hop IPv4 addr>[!<option>]\n"
+"                           - add route\n"
+"  --log-file <file name>   - specify log-file\n"
+"  --pin <port>:<rx lcore>[,<tx lcore>]\n"
+"                           - static lcore-port pinning\n"
+"  --rand-disc-level <val>  - discard rate (percent) for RANDDISC routes\n"
+    "\n");
 }
 
 static int
@@ -508,6 +520,7 @@ rt_parse_args (int argc, char **argv)
     int option_index;
     char *prgname = argv[0];
     static struct option lgopts[] = {
+        { "help", no_argument, NULL, 'h'},
         { "iface-addr", required_argument, NULL, 1001},
         { "route", required_argument, NULL, 1002},
         { "log-file", required_argument, NULL, 1003},
@@ -525,18 +538,20 @@ rt_parse_args (int argc, char **argv)
 
     argvopt = argv;
 
-    while ((opt = getopt_long(argc, argvopt, "p:q:T:",
+    while ((opt = getopt_long(argc, argvopt, "hp:q:T:",
             lgopts, &option_index)) != EOF) {
 
         int rc = 0;
+        const char *errmsg = NULL;
         switch (opt) {
+        case 'h':
+            usage(prgname);
+            return -1;
         /* portmask */
         case 'p':
             g.rt_enabled_port_mask = rt_parse_portmask(optarg);
             if (g.rt_enabled_port_mask == 0) {
-                printf("invalid portmask\n");
-                rt_usage(prgname);
-                return -1;
+                errmsg = "invalid portmask";
             }
             break;
 
@@ -544,9 +559,7 @@ rt_parse_args (int argc, char **argv)
         case 'q':
             g.rx_queue_per_lcore = rt_parse_nqueue(optarg);
             if (g.rx_queue_per_lcore == 0) {
-                printf("invalid queue number\n");
-                rt_usage(prgname);
-                return -1;
+                errmsg = "invalid queue number";
             }
             break;
 
@@ -554,9 +567,8 @@ rt_parse_args (int argc, char **argv)
         case 'T':
             timer_secs = rt_parse_timer_period(optarg);
             if (timer_secs < 0) {
-                printf("invalid timer period\n");
-                rt_usage(prgname);
-                return -1;
+                errmsg = "ERROR: invalid timer period";
+                break;
             }
             g.timer_period = timer_secs;
             break;
@@ -602,11 +614,15 @@ rt_parse_args (int argc, char **argv)
             break;
 
         default:
-            rt_usage(prgname);
+            usage(prgname);
+            errmsg = "could not parse command line";
+            break;
+        }
+        if ((rc < 0) || (errmsg != NULL)) {
+            if (errmsg != NULL)
+                fprintf(stderr, "ERROR: %s\n", errmsg);
             return -1;
         }
-        if (rc < 0)
-            return -1;
     }
 
     if (optind >= 0)

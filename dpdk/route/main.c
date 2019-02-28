@@ -443,7 +443,7 @@ main (int argc, char **argv)
     /* parse application arguments (after the EAL ones) */
     ret = rt_parse_args(argc, argv);
     if (ret < 0)
-        rte_exit(EXIT_FAILURE, "Invalid ROUTE arguments\n");
+        return -1;
 
     /* convert to number of cycles */
     g.timer_period *= rte_get_timer_hz();
@@ -484,6 +484,10 @@ main (int argc, char **argv)
 
     rt_lcore_default_assign(RT_PORT_DIR_TX, nb_ports,
         g.rt_enabled_port_mask);
+
+    ret = rt_port_check_lcores(g.rt_enabled_port_mask);
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "port-pinning is using unavailable lcores\n");
 
     log_port_lcore_assignment(g.rt_enabled_port_mask);
 

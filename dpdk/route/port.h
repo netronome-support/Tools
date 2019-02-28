@@ -72,6 +72,7 @@ void rt_port_set_ip_addr (rt_port_index_t port,
 void rt_port_assign_thread (int prtidx, int direction, int lcore);
 void rt_lcore_default_assign (int dir, int cnt, uint32_t mask);
 rx_port_list_t *create_thread_rx_port_list (void);
+int rt_port_check_lcores (uint32_t portmask);
 void log_port_lcore_assignment (uint32_t portmask);
 void rt_port_periodic (void);
 
