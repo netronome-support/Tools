@@ -70,10 +70,10 @@ void rt_port_set_ip_addr (rt_port_index_t port,
     const char *str, int len);
 
 void rt_port_assign_thread (int prtidx, int direction, int lcore);
-void rt_lcore_default_assign (int dir, int cnt, uint32_t mask);
+void rt_lcore_default_assign (int dir, int cnt);
 rx_port_list_t *create_thread_rx_port_list (void);
-int rt_port_check_lcores (uint32_t portmask);
-void log_port_lcore_assignment (uint32_t portmask);
+int rt_port_check_lcores (void);
+void log_port_lcore_assignment (void);
 void rt_port_periodic (void);
 
 extern void rt_port_table_init (void);

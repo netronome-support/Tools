@@ -109,20 +109,6 @@ struct lcore_queue_conf lcore_queue_conf[RTE_MAX_LCORE];
 
 static struct rte_eth_dev_tx_buffer *tx_buffer[RTE_MAX_ETHPORTS];
 
-static const struct rte_eth_conf port_conf = {
-    .rxmode = {
-        .split_hdr_size = 0,
-        .header_split   = 0, /**< Header Split disabled */
-        .hw_ip_checksum = 0, /**< IP checksum offload disabled */
-        .hw_vlan_filter = 0, /**< VLAN filtering disabled */
-        .jumbo_frame    = 0, /**< Jumbo Frame Support disabled */
-        .hw_strip_crc   = 0, /**< CRC stripped by hardware */
-    },
-    .txmode = {
-        .mq_mode = ETH_MQ_TX_NONE,
-    },
-};
-
 struct rte_mempool * rt_pktmbuf_pool = NULL;
 
 #define LS_EMPTY    0
@@ -213,9 +199,9 @@ print_stats (void)
 
     for (portid = 0; portid < RTE_MAX_ETHPORTS; portid++) {
         /* skip disabled ports */
-        if ((g.rt_enabled_port_mask & (1 << portid)) == 0)
+        if (!port_enabled(portid))
             continue;
-        printf("\nStatistics for port %u ------------------------------"
+        printf("\nStat_istics for port %u ------------------------------"
                "\nPackets sent: %24"PRIu64
                "\nPackets received: %20"PRIu64
                "\nPackets dropped: %21"PRIu64,
@@ -344,7 +330,7 @@ rt_launch_one_lcore (__attribute__((unused)) void *dummy)
 
 /* Check the link status of all ports in up to 9s, and print them finally */
 static void
-check_all_ports_link_status (uint8_t port_num, uint32_t port_mask)
+check_all_ports_link_status (uint8_t port_num)
 {
     #define CHECK_INTERVAL 100 /* 100ms */
     #define MAX_CHECK_TIME 90 /* 9s (90 * 100ms) in total */
@@ -360,7 +346,7 @@ check_all_ports_link_status (uint8_t port_num, uint32_t port_mask)
         for (portid = 0; portid < port_num; portid++) {
             if (force_quit)
                 return;
-            if ((port_mask & (1 << portid)) == 0)
+            if (!port_enabled(portid))
                 continue;
             memset(&link, 0, sizeof(link));
             rte_eth_link_get_nowait(portid, &link);
@@ -457,7 +443,7 @@ main (int argc, char **argv)
      */
     for (portid = 0; portid < nb_ports; portid++) {
         /* skip ports that are not enabled */
-        if ((g.rt_enabled_port_mask & (1 << portid)) == 0)
+        if (!port_enabled(portid))
             continue;
 
         nb_ports_in_mask++;
@@ -479,22 +465,20 @@ main (int argc, char **argv)
 
     grs = create_global_ring_set(nb_ports);
 
-    rt_lcore_default_assign(RT_PORT_DIR_RX, nb_ports,
-        g.rt_enabled_port_mask);
+    rt_lcore_default_assign(RT_PORT_DIR_RX, nb_ports);
 
-    rt_lcore_default_assign(RT_PORT_DIR_TX, nb_ports,
-        g.rt_enabled_port_mask);
+    rt_lcore_default_assign(RT_PORT_DIR_TX, nb_ports);
 
-    ret = rt_port_check_lcores(g.rt_enabled_port_mask);
+    ret = rt_port_check_lcores();
     if (ret < 0)
         rte_exit(EXIT_FAILURE, "port-pinning is using unavailable lcores\n");
 
-    log_port_lcore_assignment(g.rt_enabled_port_mask);
+    log_port_lcore_assignment();
 
     /* Initialise each port */
     for (portid = 0; portid < nb_ports; portid++) {
         /* skip ports that are not enabled */
-        if ((g.rt_enabled_port_mask & (1 << portid)) == 0) {
+        if (!port_enabled(portid)) {
             printf("Skipping disabled port %u\n", (unsigned) portid);
             nb_ports_available--;
             continue;
@@ -502,12 +486,18 @@ main (int argc, char **argv)
         /* init port */
         printf("Initializing port %u... ", (unsigned) portid);
         fflush(stdout);
-        ret = rte_eth_dev_configure(portid, 1, 1, &port_conf);
+        struct rte_eth_conf port_conf;
+        memset(&port_conf, 0, sizeof(port_conf));
+
+        ret = rte_eth_dev_configure(portid,
+             /* nb_rx_queue = */ 1,
+             /* nb_tx_queue = */ 1,
+             &port_conf);
         if (ret < 0)
             rte_exit(EXIT_FAILURE, "Cannot configure device: err=%d, port=%u\n",
                   ret, (unsigned) portid);
 
-        rte_eth_macaddr_get(portid,&rt_ports_eth_addr[portid]);
+        rte_eth_macaddr_get(portid, &rt_ports_eth_addr[portid]);
 
         /* init one RX queue */
         fflush(stdout);
@@ -565,7 +555,7 @@ main (int argc, char **argv)
             "All available ports are disabled. Please set portmask.\n");
     }
 
-    check_all_ports_link_status(nb_ports, g.rt_enabled_port_mask);
+    check_all_ports_link_status(nb_ports);
 
     ret = 0;
     /* launch per-lcore init on every lcore */
@@ -578,7 +568,7 @@ main (int argc, char **argv)
     }
 
     for (portid = 0; portid < nb_ports; portid++) {
-        if ((g.rt_enabled_port_mask & (1 << portid)) == 0)
+        if (!port_enabled(portid))
             continue;
         printf("Closing port %d...", portid);
         rte_eth_dev_stop(portid);

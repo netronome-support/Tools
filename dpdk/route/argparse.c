@@ -433,7 +433,8 @@ usage (const char *prgname)
 "  --log-packets            - log packets in log file\n"
 "  --no-statistics          - do not print statistics\n"
 "  --ping-nexthops          - ping all route-nexthops\n"
-"  -p <port bitmask>        - hexadecimal bitmask of ports\n"
+"  -p --port-bitmap <port bitmap>\n"
+"                           - hexadecimal bitmask of ports\n"
 "  -q <queue count>         - number of queue (=ports) per lcore (default is 1)\n"
 "  --iface-addr <portid>:[<domain>#][<ipv4 addr>[/<prefix length>]]\n"
 "                           - specify interface parameters\n"
@@ -450,14 +451,14 @@ usage (const char *prgname)
     "\n");
 }
 
-static int
+static uint64_t
 rt_parse_portmask (const char *portmask)
 {
     char *end = NULL;
-    unsigned long pm;
+    uint64_t pm;
 
     /* parse hexadecimal string */
-    pm = strtoul(portmask, &end, 16);
+    pm = strtoull(portmask, &end, 16);
     if ((portmask[0] == '\0') || (end == NULL) || (*end != '\0'))
         return -1;
 
@@ -521,6 +522,7 @@ rt_parse_args (int argc, char **argv)
     char *prgname = argv[0];
     static struct option lgopts[] = {
         { "help", no_argument, NULL, 'h'},
+        { "port-bitmap", required_argument, NULL, 'p'},
         { "iface-addr", required_argument, NULL, 1001},
         { "route", required_argument, NULL, 1002},
         { "log-file", required_argument, NULL, 1003},
@@ -549,8 +551,8 @@ rt_parse_args (int argc, char **argv)
             return -1;
         /* portmask */
         case 'p':
-            g.rt_enabled_port_mask = rt_parse_portmask(optarg);
-            if (g.rt_enabled_port_mask == 0) {
+            g.enabled_port_mask = rt_parse_portmask(optarg);
+            if (g.enabled_port_mask == 0) {
                 errmsg = "invalid portmask";
             }
             break;

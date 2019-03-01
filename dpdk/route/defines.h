@@ -32,12 +32,18 @@ typedef struct {
     /* A tsc-based timer responsible for triggering statistics printout */
     uint64_t timer_period;
     /* mask of enabled ports */
-    uint32_t rt_enabled_port_mask;
+    uint64_t enabled_port_mask;
     int rx_queue_per_lcore;
     uint64_t rand_disc_level;
 } rt_global_t;
 
 extern rt_global_t g;
+
+static inline int
+port_enabled (int prtidx)
+{
+    return (g.enabled_port_mask & (1LU << prtidx)) != 0;
+}
 
 static inline void
 rt_global_init (void)
