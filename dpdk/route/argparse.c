@@ -431,6 +431,7 @@ usage (const char *prgname)
     printf("Application Options:\n"
 "  -h --help                - print this help\n"
 "  --log-packets            - log packets in log file\n"
+"  --log-pkt-len <int>      - Maximum packet size to capture in log\n"
 "  --no-statistics          - do not print statistics\n"
 "  --ping-nexthops          - ping all route-nexthops\n"
 "  -p --port-bitmap <port bitmap>\n"
@@ -533,6 +534,7 @@ rt_parse_args (int argc, char **argv)
         { "add-iface-addr", required_argument, NULL, 1008},
         { "rand-disc-level", required_argument, NULL, 1009},
         { "log-packets", no_argument, &dbgmsg_globals.log_packets, 1},
+        { "log-pkt-len", required_argument, NULL, 1010},
         { "no-statistics", no_argument, &g.print_statistics, 0},
         { "ping-nexthops", no_argument, &g.ping_nexthops, 1},
         { NULL, 0, 0, 0}
@@ -611,7 +613,11 @@ rt_parse_args (int argc, char **argv)
             rc = rt_parse_random_discard_level(optarg);
             break;
 
-        /* long options */
+         case 1010: /* --log-pkt-len */
+            dbgmsg_globals.log_pkt_len = strtol(optarg, NULL, 10);
+            break;
+
+       /* long options */
         case 0:
             break;
 

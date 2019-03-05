@@ -12,6 +12,7 @@
 typedef struct {
     int log_level;
     int log_packets;
+    int log_pkt_len;
 } dbgmsg_globals_t;
 
 extern dbgmsg_globals_t dbgmsg_globals;

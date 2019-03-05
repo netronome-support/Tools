@@ -70,7 +70,8 @@ dbg_check_credits (dbgmsg_state_t *dbgstate)
 void f_dbgmsg (dbgmsg_state_t *dbgstate,
     int level, rt_pkt_t pkt, const char *fmt, ...)
 {
-    char str[4096];
+    const int max_pkt_size_log_len = 2048;
+    char str[256 + 3 * max_pkt_size_log_len];
     int n = 0;
 
     if (rt_log_fd == NULL)
@@ -107,7 +108,8 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
         n += sprintf(&str[n], "-  %18p  ", pkt.mbuf);
         int i;
         uint8_t *ba = (uint8_t *) pkt.eth;
-        int len = min(14 + 20 + 8, rt_pkt_length(pkt));
+        int len = min(dbgmsg_globals.log_pkt_len, rt_pkt_length(pkt));
+        len = min(len, max_pkt_size_log_len);
         for (i = 0 ; i < len ; i++)
             n += sprintf(&str[n], " %02x", ba[i]);
         n += sprintf(&str[n], "\n");
@@ -132,6 +134,7 @@ void dbgmsg_init (void)
     dbg_speed_factor = (float) DBG_CREDIT_UNIT / (float) rte_get_tsc_hz();
     dbgmsg_globals.log_level = INFO;
     dbgmsg_globals.log_packets = 0;
+    dbgmsg_globals.log_pkt_len = 14 + 20 + 8;
 }
 
 int dbgmsg_fopen (const char *fname)
