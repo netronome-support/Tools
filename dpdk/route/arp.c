@@ -109,7 +109,7 @@ rt_arp_request_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
             " (req: %s, port(%d): %s)",
             rt_ipaddr_str(t0, ap.t_ip_addr), pi->idx,
             rt_ipaddr_str(t1, pi->ipaddr));
-        rt_pkt_discard(pkt);
+        rt_pkt_terminate(pkt);
         return;
     }
     /* Learn about the sender */
@@ -139,7 +139,7 @@ static inline void
 rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 {
     rt_rd_t rdidx = pkt.rdidx;
-    rt_pkt_discard(pkt);
+    rt_pkt_terminate(pkt);
     const char *optstr = "";
 
     rt_lpm_t *rt = rt_lpm_lookup_subnet(rdidx, ap.s_ip_addr);
@@ -167,30 +167,25 @@ rt_arp_process (rt_pkt_t pkt)
     rt_pkt_arp_t ap;
     rt_arp_pkt_ntoh(pkt.pp.l3, &ap);
 
-    int cntidx;
     if (ap.hw_type != 1) {
         dbgmsg(WARN, pkt, "ARP with bad HW type (0x%04x)",
             ap.hw_type);
-        cntidx = 1;
-        goto Discard;
+        goto PktError;
     }
     if (ap.protocol != 0x0800) {
         dbgmsg(WARN, pkt, "ARP with bad protocol type (0x%04x)",
             ap.protocol);
-        cntidx = 1;
-        goto Discard;
+        goto PktError;
     }
     if (ap.hw_addr_length != 6) {
         dbgmsg(WARN, pkt, "ARP with bad HW length (%u)",
             ap.hw_addr_length);
-        cntidx = 1;
-        goto Discard;
+        goto PktError;
     }
     if (ap.proto_addr_length != 4) {
         dbgmsg(WARN, pkt, "ARP with bad protocol length (%u)",
             ap.proto_addr_length);
-        cntidx = 1;
-        goto Discard;
+        goto PktError;
     }
 
     switch (ap.opcode) {
@@ -202,13 +197,11 @@ rt_arp_process (rt_pkt_t pkt)
         return;
     default:
         dbgmsg(WARN, pkt, "ARP with bad opcode");
-        cntidx = 1;
-        goto Discard;
+        goto PktError;
     }
 
-  Discard:
-    rt_stats_incr(cntidx);
-    rt_pkt_discard(pkt);
+  PktError:
+    rt_pkt_discard_error(pkt);
 }
 
 static inline void
@@ -229,7 +222,7 @@ rt_arp_send_request (rt_pkt_t pkt, rt_port_info_t *pi,
         char ts0[32];
         dbgmsg(WARN, nopkt, "ARP failed - (%u) %s is not in any subnet",
             pkt.rdidx, rt_ipaddr_str(ts0, ipda));
-        rt_pkt_discard(pkt);
+        rt_pkt_discard_error(pkt);
         return;
     }
     ap.s_ip_addr = srt->ifipa;

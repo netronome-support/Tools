@@ -18,12 +18,16 @@ struct load_statistics {
 
 /* Per-port statistics struct */
 struct rt_port_statistics {
-    uint64_t tx;
     uint64_t rx;
-    uint64_t dropped;
+    uint64_t tx;
+    uint64_t qfull;
+    uint64_t disc;
+    uint64_t error;
+    uint64_t term;
     struct load_statistics ls, prev;
 } __rte_cache_aligned;
-struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
+
+extern struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
 
 static inline void
 update_load_statistics (int portid, int rx_pkt_cnt)
@@ -52,5 +56,6 @@ rt_stats_incr (rt_cnt_idx_t cntidx)
 
 void print_load_statistics (int prtidx);
 void print_stats (void);
+void rt_stats_init (void);
 
 #endif

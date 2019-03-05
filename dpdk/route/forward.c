@@ -32,7 +32,7 @@ rt_pkt_ipv4_local_process (rt_pkt_t pkt)
         rt_ipaddr_str(t1, ntohl(*PTR(pkt.pp.l3, uint32_t, 12))),
         proto);
 
-    rt_pkt_discard(pkt);
+    rt_pkt_terminate(pkt);
 }
 
 void
@@ -67,7 +67,7 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
         /* No Route - Discard */
         dbgmsg(WARN, pkt, "IPv4 NO ROUTE for (%u) %s",
             rdidx, rt_ipaddr_nr_str(ipda));
-        rt_pkt_discard(pkt);
+        rt_pkt_discard_error(pkt);
         return;
     }
 
@@ -100,9 +100,9 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
         nhipa = rt->nhipa;
         assert(rt->pi != NULL);
     } else {
-        dbgmsg(WARN, pkt, "What is this (%u) %s",
+        dbgmsg(WARN, pkt, "Route Table Confusion (%u) %s",
             rdidx, rt_ipaddr_nr_str(ipda));
-        rt_pkt_discard(pkt);
+        rt_pkt_discard_error(pkt);
         return;
     }
 
@@ -139,6 +139,32 @@ rt_pkt_ipv4_process (rt_pkt_t pkt, rt_ipv4_addr_t ipda)
     rt_pkt_ipv4_send(pkt, ipda, 0);
 }
 
+/*
+ * Fast Dirct-Table Packet Processing
+ */
+static inline void
+rt_pkt_dt_process (rt_pkt_t pkt, rt_dt_route_t *drp)
+{
+    if (unlikely(drp->flags)) {
+        if (drp->flags & RT_FWD_F_DISCARD) {
+            rt_pkt_discard(pkt);
+            return;
+        }
+        if (drp->flags & RT_FWD_F_RANDDISC) {
+            uint64_t rnd = (uint64_t) (uint32_t) rte_rand();
+            if (rnd < g.rand_disc_level) {
+                rt_pkt_discard(pkt);
+                return;
+            }
+        }
+    }
+    /* Update MAC addresses */
+    memcpy(&pkt.eth->dst, drp->eth.dst, 6);
+    memcpy(&pkt.eth->src, drp->eth.src, 6);
+    /* Send Packet */
+    rt_pkt_send_fast(pkt, drp->port);
+}
+
 void
 rt_pkt_process (int port, struct rte_mbuf *mbuf)
 {
@@ -161,29 +187,12 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
         memcpy(dt_key.hwaddr, pkt.eth->dst, 6);
         rt_dt_route_t *drp = rt_dt_lookup(&dt_key);
         if (likely(drp != NULL)) {
-            if (unlikely(drp->flags)) {
-                if (drp->flags & RT_FWD_F_DISCARD) {
-                    rt_pkt_discard(pkt);
-                    return;
-                }
-                if (drp->flags & RT_FWD_F_RANDDISC) {
-                    uint64_t rnd = (uint64_t) (uint32_t) rte_rand();
-                    if (rnd < g.rand_disc_level) {
-                        rt_pkt_discard(pkt);
-                        return;
-                    }
-                }
-            }
-            /* Update MAC addresses */
-            memcpy(&pkt.eth->dst, drp->eth.dst, 6);
-            memcpy(&pkt.eth->src, drp->eth.src, 6);
-            /* Send Packet */
-            rt_pkt_send_fast(pkt, drp->port);
+            rt_pkt_dt_process(pkt, drp);
             return;
         }
     }
 
-    if (likely((pkt.eth->dst[0] & 1) == 0)) {
+    if (likely(rt_pkt_is_unicast(pkt))) {
         /* Unicast - Compare Destination MAC address */
         if (rt_eth_addr_compare(&pkt.eth->dst, &pkt.pi->hwaddr)
                 || (pkt.pi->flags & RT_PORT_F_PROMISC)) {
@@ -216,5 +225,6 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
         dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
             ethtype);
     }
-    rt_pkt_discard(pkt);
+
+    rt_pkt_discard_error(pkt);
 }

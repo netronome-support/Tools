@@ -84,6 +84,7 @@ tx_queue_flush (tx_queue_set_t *qp, int prtidx, int count)
         dbgmsg(DEBUG, nopkt, "Ring FULL (Prt %u, Core %u, Disc %u)",
             prtidx, rte_lcore_id(), count - enqcnt);
         pktmbuf_free_bulk(&mbufs[enqcnt], count - enqcnt);
+        port_statistics[prtidx].qfull += count - enqcnt;
     }
     qp->pktcnt[prtidx] = 0;
 }

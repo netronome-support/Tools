@@ -306,6 +306,7 @@ main (int argc, char **argv)
     signal(SIGTERM, signal_handler);
 
     rt_global_init();
+    rt_stats_init();
     dbgmsg_init();
     rt_lpm_table_init();
     rt_dt_init ();
@@ -321,7 +322,11 @@ main (int argc, char **argv)
     /* convert to number of cycles */
     g.timer_period *= rte_get_timer_hz();
 
+    #if RTE_VERSION < RTE_VERSION_NUM(18,5,0,0)
     nb_ports = rte_eth_dev_count();
+    #else
+    nb_ports = rte_eth_dev_count_avail();
+    #endif
     if (nb_ports == 0)
         rte_exit(EXIT_FAILURE, "No Ethernet ports - bye\n");
 
@@ -415,7 +420,7 @@ main (int argc, char **argv)
 
         ret = rte_eth_tx_buffer_set_err_callback(tx_buffer[portid],
             rte_eth_tx_buffer_count_callback,
-            &port_statistics[portid].dropped);
+            &port_statistics[portid].qfull);
         if (ret < 0)
             rte_exit(EXIT_FAILURE, "Cannot set error callback for "
                 "tx buffer on port %u\n", (unsigned) portid);
@@ -432,9 +437,6 @@ main (int argc, char **argv)
             tx_buffer[portid]);
 
         rte_eth_promiscuous_enable(portid);
-
-        /* initialize port stats */
-        memset(&port_statistics, 0, sizeof(port_statistics));
     }
 
     if (!nb_ports_available) {

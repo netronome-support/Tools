@@ -14,7 +14,7 @@ rt_pkt_send (rt_pkt_t pkt, rt_port_info_t *pi)
 {
     //dbgmsg(INFO, pkt, "rt_pkt_send");
     rt_port_index_t port = pi->idx;
-    if (!(pi->flags & RT_PORT_F_EXIST)) {
+    if (unlikely(!(pi->flags & RT_PORT_F_EXIST))) {
         dbgmsg(WARN, pkt, "port not active (%u)", pi->idx);
         rt_pkt_discard(pkt);
         return;
@@ -22,14 +22,6 @@ rt_pkt_send (rt_pkt_t pkt, rt_port_info_t *pi)
     assert(pkt.rdidx != 0);
     assert(pkt.mbuf != NULL);
     tx_pkt_enqueue(port, pkt.mbuf);
-}
-
-void
-rt_pkt_discard (rt_pkt_t pkt)
-{
-    assert(pkt.mbuf != NULL);
-    rte_pktmbuf_free(pkt.mbuf);
-    pkt.mbuf = NULL;
 }
 
 void

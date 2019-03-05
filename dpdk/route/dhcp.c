@@ -197,11 +197,11 @@ rt_dhcp_process (rt_pkt_t pkt)
 
     if (dhcp->opcode != 2) {
         dbgmsg(WARN, pkt, "DCHP wrong opcode (%u)", dhcp->opcode);
-        goto Discard;
+        goto Error;
     }
     if (info->transaction != ntohl(dhcp->transaction)) {
         dbgmsg(WARN, pkt, "DCHP wrong transaction ID");
-        goto Discard;
+        goto Error;
     }
 
     rt_dhcp_options_parse(dhcp, &opts);
@@ -213,7 +213,7 @@ rt_dhcp_process (rt_pkt_t pkt)
                 dbgmsg(INFO, pkt, "DHCP OFFER received (%s/%u)"
                     " but ignored since it is /32",
                     rt_ipaddr_nr_str(l_ipaddr), opts.plen);
-                goto Discard;
+                goto Error;
             }
             dbgmsg(INFO, pkt, "DHCP OFFER received (%s/%u)",
                 rt_ipaddr_nr_str(l_ipaddr), opts.plen);
@@ -234,10 +234,12 @@ rt_dhcp_process (rt_pkt_t pkt)
             info->state = 0;
             break;
         default:
-            dbgmsg(WARN, pkt, "DHCP unsupported message (%u)", opts.msgtype);
-            break;
+            dbgmsg(WARN, pkt, "DHCP unsupported message (type=%u)", opts.msgtype);
+            goto Error;
     }
 
-  Discard:
-    rt_pkt_discard(pkt);
+    rt_pkt_terminate(pkt);
+    return;
+  Error:
+    rt_pkt_discard_error(pkt);
 }

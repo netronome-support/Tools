@@ -2,6 +2,7 @@
 #define __RT_PKTUTILS_H__
 
 #include <string.h>
+#include <stdbool.h>
 
 #include <rte_ethdev.h>
 #include <rte_mbuf.h>
@@ -44,7 +45,47 @@ void rt_pkt_create (rt_pkt_t *pkt);
 
 void rt_pkt_send (rt_pkt_t pkt, rt_port_info_t *pi);
 
-void rt_pkt_discard (rt_pkt_t pkt);
+/*
+ * Discard and update DISC counter
+ */
+static inline void
+rt_pkt_discard (rt_pkt_t pkt)
+{
+    assert(pkt.mbuf != NULL);
+    rte_pktmbuf_free(pkt.mbuf);
+    pkt.mbuf = NULL;
+    if (pkt.pi != NULL) {
+        port_statistics[pkt.pi->idx].disc++;
+    }
+}
+
+/*
+ * Discard and update ERROR counter
+ */
+static inline void
+rt_pkt_discard_error (rt_pkt_t pkt)
+{
+    assert(pkt.mbuf != NULL);
+    rte_pktmbuf_free(pkt.mbuf);
+    pkt.mbuf = NULL;
+    if (pkt.pi != NULL) {
+        port_statistics[pkt.pi->idx].error++;
+    }
+}
+
+/*
+ * Discard and update TERM counter
+ */
+static inline void
+rt_pkt_terminate (rt_pkt_t pkt)
+{
+    assert(pkt.mbuf != NULL);
+    rte_pktmbuf_free(pkt.mbuf);
+    pkt.mbuf = NULL;
+    if (pkt.pi != NULL) {
+        port_statistics[pkt.pi->idx].term++;
+    }
+}
 
 static inline int
 rt_pkt_length (rt_pkt_t pkt)
@@ -57,6 +98,12 @@ rt_pkt_set_length (rt_pkt_t pkt, int length)
 {
     pkt.mbuf->pkt_len = length;
     pkt.mbuf->data_len = length;
+}
+
+static inline bool
+rt_pkt_is_unicast (rt_pkt_t pkt)
+{
+    return ((pkt.eth->dst[0] & 1) == 0);
 }
 
 void rt_pkt_ipv4_setup (rt_pkt_t *pkt, uint8_t protocol,

@@ -136,20 +136,23 @@ flush_thread_ring_set (tx_ring_set_t *trs)
             continue;
         int pktcnt, sndcnt;
         do {
+            int prtidx = ri->prtidx;
             pktcnt = rte_ring_mc_dequeue_burst(ring, (void **) mbufs,
             #if RTE_VERSION >= RTE_VERSION_NUM(17,2,0,0)
                 TX_BURST_SIZE, NULL);
             #else
                 TX_BURST_SIZE);
             #endif
-            sndcnt = rte_eth_tx_burst(ri->prtidx, 0, mbufs, pktcnt);
+            sndcnt = rte_eth_tx_burst(prtidx, 0, mbufs, pktcnt);
             if (unlikely(sndcnt < pktcnt)) {
                 dbgmsg(DEBUG, nopkt,
                     "TX FULL (Prt %u, Disc %u)",
-                    ri->prtidx, sndcnt < pktcnt);
+                    prtidx, sndcnt < pktcnt);
                 pktmbuf_free_bulk(&mbufs[sndcnt], pktcnt - sndcnt);
+                port_statistics[prtidx].qfull += pktcnt - sndcnt;
                 break;
             }
+            port_statistics[prtidx].tx += sndcnt;
         } while (sndcnt == TX_BURST_SIZE);
     }
 }
