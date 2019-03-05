@@ -45,7 +45,7 @@ APP = route
 SRCS-y := main.c
 SRCS-y += forward.c arp.c icmp.c pktutils.c dhcp.c
 SRCS-y += tables.c dbgmsg.c port.c argparse.c
-SRCS-y += rings.c
+SRCS-y += rings.c stats.c
 
 CFLAGS += -O3
 CFLAGS += $(WERROR_FLAGS)

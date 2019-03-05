@@ -9,6 +9,8 @@
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
+#define MAX_PKT_BURST 64
+
 /* Network Byte Order Ethernet Hardware (MAC) Address */
 //typedef uint64_t rt_eth_addr_t;
 typedef uint8_t rt_eth_addr_t[6];
