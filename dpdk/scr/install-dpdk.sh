@@ -152,7 +152,7 @@ fi
 
 ########################################
 
-install-packages.sh ${prereqs[@]}
+install-packages.sh ${prereqs[@]} --update
     check_status "failed to install prerequisites"
 
 ########################################

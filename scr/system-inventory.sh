@@ -153,12 +153,28 @@ function run () {
         local capfile="$capdir/$fname"
     fi
     $tool $args > $capfile 2>> $capdir/cmd.log
-    local rc=$?
+    rc=$?
     if [ $rc -ne 0 ]; then
         echo "  ERROR Code: $rc" \
             >> $capdir/cmd.log
     fi
 }
+
+########################################################
+# Create list of available NFPs
+
+nfp_pf_bdf_list=( $(lspci -d 19ee: \
+    | cut -d ' ' -f 1 \
+    | sed -rn 's/(:00\.0)$/\1/p' ) )
+nfpidx=0
+nfp_idx_list=()
+for bdf in ${nfp_pf_bdf_list[@]} ; do
+    run "nfp-nsp" "-N -n $nfpidx" "nfp-$nfpidx/nsp-no-op.txt"
+    if [ $rc -eq 0 ]; then
+        nfp_idx_list+=( $nfpidx )
+    fi
+    nfpidx=$(( nfpidx + 1 ))
+done
 
 ########################################################
 
@@ -169,8 +185,6 @@ function sample () {
 
     run "ifconfig" "-a"             "$name/ifconfig.txt"
     run "netstat" "-s"              "$name/netstat-s.txt"
-    run "nfp" "-m mac show port info 0 0" "$name/nfp-mac-0-0.txt"
-    run "nfp" "-m mac show port info 0 4" "$name/nfp-mac-0-4.txt"
     run "ovs-ctl" "status troubleshoot -C" \
         "$name/ovs-ctl-status-troubleshoot.txt"
     if [ "$(pgrep virtiorelayd)" != "" ]; then
@@ -217,6 +231,12 @@ sample "s1"
 
 ########################################################
 
+if [ -d /opt/netronome/bin ]; then
+    export PATH="$PATH:/opt/netronome/bin"
+fi
+
+########################################################
+
 run "whoami" ""                 "whoami.txt"
 run "uname" "-r"                "kernel-version.txt"
 run "uname" "-a"                "uname-all.txt"
@@ -247,14 +267,24 @@ run "qemu-system-x86_64" "--version" "qemu-system-version.txt"
 
 run "getenforce" "" "selinux-getenforce.txt"
 
-run "/opt/netronome/bin/ovs-ctl" "version" "ovs/ovs-version.txt"
-run "/opt/netronome/bin/ovs-ctl" "status" "ovs/ovs-status.txt"
-run "/opt/netronome/bin/nfp-hwinfo" "" "nfp/hwinfo.txt"
-run "/opt/netronome/bin/nfp-media" "" "nfp/media.txt"
-run "/opt/netronome/bin/nfp-programmables" "" "nfp/programmables.txt"
-run "/opt/netronome/bin/nfp-arm" "-D" "nfp/arm-D.txt"
-run "/opt/netronome/bin/nfp-phymod" "" "nfp/phymod.txt"
-run "/opt/netronome/bin/nfp-res" "-L" "nfp/locks.txt"
+run "ovs-ctl" "version"         "ovs/ovs-version.txt"
+run "ovs-ctl" "status"          "ovs/ovs-status.txt"
+
+# Netronome NFP BSP Commands
+for nfpidx in ${nfp_idx_list[@]} ; do
+    run "nfp-hwinfo" "-n $nfpidx"           "nfp-$nfpidx/hwinfo.txt"
+    run "nfp-media" "-n $nfpidx"            "nfp-$nfpidx/media.txt"
+    run "nfp-programmables" "-n $nfpidx"    "nfp-$nfpidx/programmables.txt"
+    run "nfp-arm" "-D -n $nfpidx"           "nfp-$nfpidx/arm-D.txt"
+    run "nfp-phymod" "-n $nfpidx"           "nfp-$nfpidx/phymod.txt"
+    run "nfp-res" "-L -n $nfpidx"           "nfp-$nfpidx/locks.txt"
+    run "nfp-support" "-n $nfpidx"          "nfp-$nfpidx/support.txt"
+    run "nfp-system" "-n $nfpidx"           "nfp-$nfpidx/system.txt"
+    run "nfp" "-n $nfpidx -m mac show port info 0 0" \
+                                            "nfp-$nfpidx/mac-0-0.txt"
+    run "nfp" "-n $nfpidx -m mac show port info 0 4" \
+                                            "nfp-$nfpidx/mac-0-4.txt"
+done
 
 run "dpdk-devbind.py" "--status" "dpdk-devbind-status.txt"
 run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
