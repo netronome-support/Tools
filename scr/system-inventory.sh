@@ -130,6 +130,7 @@ function run () {
     local cmd="$1"
     local args="$2"
     local fname="$3"
+    rc=""
     if [ -x $cmd ]; then
         local tool="$cmd"
     else
@@ -170,7 +171,7 @@ nfpidx=0
 nfp_idx_list=()
 for bdf in ${nfp_pf_bdf_list[@]} ; do
     run "nfp-nsp" "-N -n $nfpidx" "nfp-$nfpidx/nsp-no-op.txt"
-    if [ $rc -eq 0 ]; then
+    if [ "$rc" == "0" ]; then
         nfp_idx_list+=( $nfpidx )
     fi
     nfpidx=$(( nfpidx + 1 ))
@@ -404,14 +405,18 @@ done
 if which ethtool > /dev/null 2>&1; then
     ifdir="$capdir/ethtool"
     flaglist=()
-    flaglist+=( "" ) # Current Settings
-    flaglist+=( "--driver" ) # Get Driver Information (-i)
-    flaglist+=( "--show-features" ) # Show netdev feature list (-k)
-    flaglist+=( "--module-info" ) # Show Module Information (-m)
+    flaglist+=( "" )                    # Current Settings
+    flaglist+=( "--driver" )            # (-i) Get Driver Information
+    flaglist+=( "--show-features" )     # (-k) Show netdev feature list
+    flaglist+=( "--module-info" )       # (-m) Show Module Information
+    flaglist+=( "--show-channels" )     # (-l) Show Channels
+    flaglist+=( "--show-rxfh" )         # (-x) Show RSS hash table
+    flaglist+=( "--show-coalesce" )     # (-c) Show Coalesce
+    flaglist+=( "--show-ring" )         # (-g) Show Ring Information
     f_mkdir "ethtool/info"
     f_mkdir "ethtool/stats"
     for ifname in $iflist ; do
-        for flag in ${flaglist[@]} ; do
+        for flag in "${flaglist[@]}" ; do
             {   printf "\n-- 'ethtool $flag'\n"
                 ethtool ${flag} $ifname
             } >> $ifdir/info/$ifname.txt 2>&1
