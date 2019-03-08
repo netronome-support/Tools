@@ -11,6 +11,12 @@
 #include <stdio.h>
 extern FILE *rt_log_fd;
 
+/* Queue Descriptor */
+typedef struct {
+    rt_port_index_t     prtidx;
+    rt_queue_index_t    queidx;
+} rt_queue_t;
+
 /* DHCP Port Information */
 typedef struct {
     uint8_t             state;
@@ -30,20 +36,21 @@ typedef struct {
     void                *tx_buffer;
     rt_cnt_idx_t        cntidx;
     rt_dhcp_info_t      dhcpinfo;
-    uint16_t            rx_lcore;
-    uint16_t            tx_lcore;
+    rt_lcore_id_t       rx_lcore;
+    rt_lcore_id_t       tx_lcore;
 } rt_port_info_t;
 
+/* Queue List to process on RX */
 typedef struct {
     int count;
-    rt_port_index_t prtidx[0];
-} rx_port_list_t;
+    rt_queue_t list[0];
+} rt_queue_list_t;
 
 #define RT_PORT_F_EXIST         (1 << 0)
 #define RT_PORT_F_PROMISC       (1 << 1)
 #define RT_PORT_F_GRATARP       (1 << 2)
 
-#define RT_PORT_LCORE_UNASSIGNED    (65535)
+#define RT_PORT_LCORE_UNASSIGNED    (255)
 
 #define RT_PORT_DIR_RX      1
 #define RT_PORT_DIR_TX      2
@@ -69,9 +76,9 @@ void rt_port_set_ipv4_addr (rt_port_index_t port, rt_ipv4_addr_t addr,
 void rt_port_set_ip_addr (rt_port_index_t port,
     const char *str, int len);
 
-void rt_port_assign_thread (int prtidx, int direction, int lcore);
+void rt_port_assign_thread (int prtidx, int direction, rt_lcore_id_t lcore);
 void rt_lcore_default_assign (int dir, int cnt);
-rx_port_list_t *create_thread_rx_port_list (void);
+rt_queue_list_t *create_thread_rx_queue_list (rt_lcore_id_t lcore);
 int rt_port_check_lcores (void);
 void log_port_lcore_assignment (void);
 void rt_port_periodic (void);

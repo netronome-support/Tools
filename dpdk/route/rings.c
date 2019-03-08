@@ -98,7 +98,7 @@ create_global_ring_set (int prtcnt)
 tx_ring_set_t *
 create_thread_ring_set (tx_ring_set_t *grs)
 {
-    uint16_t lcore = rte_lcore_id();
+    rt_lcore_id_t lcore = rte_lcore_id();
     int prtcnt = 0;
     int prtidx;
     int thridx = 0;

@@ -50,7 +50,7 @@ rt_port_set_ip_addr (rt_port_index_t port, const char *str, int len)
 }
 
 void
-rt_port_assign_thread (int prtidx, int direction, int lcore)
+rt_port_assign_thread (int prtidx, int direction, rt_lcore_id_t lcore)
 {
     rt_port_info_t *pi = rt_port_lookup(prtidx);
     switch (direction) {
@@ -70,62 +70,63 @@ rt_port_query_lcore (int prtidx, int direction)
     return RT_PORT_LCORE_UNASSIGNED;
 }
 
-static inline int
-find_next_lcore_index (uint8_t lcore_idx)
+static inline rt_lcore_id_t
+find_next_lcore_index (rt_lcore_id_t lcore_id)
 {
     for (;;) {
-        if (lcore_idx >= RTE_MAX_LCORE)
-            lcore_idx = 0;
-        if (rte_lcore_is_enabled(lcore_idx))
-            return lcore_idx;
-        lcore_idx++;
+        if (lcore_id >= RTE_MAX_LCORE)
+            lcore_id = 0;
+        if (rte_lcore_is_enabled(lcore_id))
+            return lcore_id;
+        lcore_id++;
     }
 }
 
 void
 rt_lcore_default_assign (int direction, int nb_ports)
 {
-    uint8_t lcore_next_idx = 0;
+    rt_lcore_id_t lcore_next_idx = 0;
     int prtidx;
     for (prtidx = 0 ; prtidx <= nb_ports ; prtidx++) {
         if (!port_enabled(prtidx))
             continue;
         /* Skip if the port is already assigned */
-        uint16_t c_lcore = rt_port_query_lcore(prtidx, direction);
+        rt_lcore_id_t c_lcore = rt_port_query_lcore(prtidx, direction);
         if (c_lcore != RT_PORT_LCORE_UNASSIGNED)
             continue;
-        uint16_t n_lcore = find_next_lcore_index(lcore_next_idx);
+        rt_lcore_id_t n_lcore = find_next_lcore_index(lcore_next_idx);
         rt_port_assign_thread(prtidx, direction, n_lcore);
         lcore_next_idx = n_lcore + 1;
     }
 }
 
-rx_port_list_t *
-create_thread_rx_port_list (void)
+rt_queue_list_t *
+create_thread_rx_queue_list (rt_lcore_id_t lcore)
 {
-    uint16_t lcore = rte_lcore_id();
-    int prtcnt = 0;
+    int qcount = 0;
     int prtidx;
     /* Count the number of ports needed */
     for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         if (pi->rx_lcore == lcore) {
-            prtcnt++;
+            qcount++;
         }
     }
-    size_t size = sizeof(rx_port_list_t)
-        + prtcnt * sizeof(rt_port_index_t);
-    rx_port_list_t *pl = (rx_port_list_t *) malloc(size);
-    assert(pl != NULL);
-    pl->count = prtcnt;
-    int lstidx = 0;
+    size_t size = sizeof(rt_queue_list_t)
+        + qcount * sizeof(rt_queue_t);
+    rt_queue_list_t *qlist = (rt_queue_list_t *) malloc(size);
+    assert(qlist != NULL);
+    qlist->count = qcount;
+    rt_queue_t *qp = &qlist->list[0];
     for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         if (pi->rx_lcore == lcore) {
-            pl->prtidx[lstidx++] = prtidx;
+            qp->prtidx = prtidx;
+            qp->queidx = 0; /* Only queue '0' for now */
+            qp++;
         }
     }
-    return pl;
+    return qlist;
 }
 
 int
@@ -137,7 +138,7 @@ rt_port_check_lcores (void)
             continue;
         int dir;
         for (dir = RT_PORT_DIR_RX ; dir <= RT_PORT_DIR_TX ; dir++) {
-            uint16_t lcore = rt_port_query_lcore(prtidx, dir);
+            rt_lcore_id_t lcore = rt_port_query_lcore(prtidx, dir);
             if (!rte_lcore_is_enabled(lcore)) {
                 fprintf(stderr, "ERROR: lcore %u is not enabled\n", lcore);
                 return -1;

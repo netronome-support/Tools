@@ -76,6 +76,7 @@
 #include "dbgmsg.h"
 #include "rings.h"
 #include "stats.h"
+#include "port-process.h"
 
 rt_global_t g;
 
@@ -115,24 +116,21 @@ struct rte_mempool * rt_pktmbuf_pool = NULL;
 static void
 rt_main_loop (void)
 {
-    struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    struct rte_mbuf *m;
-    unsigned lcore_id;
     uint64_t prev_tsc, diff_tsc, cur_tsc, timer_tsc;
-    unsigned i, j, nb_rx;
     const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
             BURST_TX_DRAIN_US;
 
     prev_tsc = 0;
     timer_tsc = 0;
 
-    lcore_id = rte_lcore_id();
+    rt_lcore_id_t lcore_id = rte_lcore_id();
 
     tx_queue_set_t *qs = create_queue_set(grs);
     tx_ring_set_t *trs = create_thread_ring_set(grs);
-    rx_port_list_t *rx_port_list = create_thread_rx_port_list();
+    rt_queue_list_t *rx_queue_list = create_thread_rx_queue_list(lcore_id);
 
-    if ((rx_port_list->count == 0) && (trs->count == 0)
+    if ((rx_queue_list->count == 0)
+            && (trs->count == 0)
             && (lcore_id != rte_get_master_lcore())) {
         RTE_LOG(INFO, ROUTE, "lcore %u has nothing to do\n", lcore_id);
         return;
@@ -182,25 +180,9 @@ rt_main_loop (void)
         }
 
         /*
-         * Read packet from RX queues
+         * Read packet from RX queues and process them
          */
-        unsigned int count = rx_port_list->count;
-        for (i = 0 ; i < count ; i++) {
-            int prtidx = rx_port_list->prtidx[i];
-
-            nb_rx = rte_eth_rx_burst((uint8_t) prtidx, 0,
-                pkts_burst, MAX_PKT_BURST);
-
-            port_statistics[prtidx].rx += nb_rx;
-
-            update_load_statistics(prtidx, nb_rx);
-
-            for (j = 0 ; j < nb_rx ; j++) {
-                m = pkts_burst[j];
-                rte_prefetch0(rte_pktmbuf_mtod(m, void *));
-                rt_pkt_process(prtidx, m);
-            }
-        }
+        rx_port_process_task_list(rx_queue_list);
 
         tx_queue_flush_all(qs);
 
@@ -291,7 +273,7 @@ main (int argc, char **argv)
     uint8_t nb_ports;
     uint8_t nb_ports_available;
     uint8_t portid;
-    unsigned lcore_id;
+    rt_lcore_id_t lcore_id;
     unsigned nb_ports_in_mask = 0;
 
     /* init EAL */

@@ -44,8 +44,10 @@ typedef struct rt_dt_route_s {
 
 typedef struct rt_lpm_s {
     struct rt_lpm_s *prev, *next;
+    /* Key */
     rt_rd_t rdidx;
     rt_ipv4_prefix_t prefix;
+    /* Result */
     uint32_t flags;
     rt_port_info_t *pi; /* Egress Port Information */
     union {
@@ -68,8 +70,10 @@ typedef struct rt_lpm_s {
 
 typedef struct rt_ipv4_ar_s {
     struct rt_ipv4_ar_s *prev, *next;
+    /* Key */
     rt_port_info_t *pi;
     rt_ipv4_addr_t ipaddr;
+    /* Result */
     uint32_t flags;
     rt_eth_addr_t hwaddr; /* Remote MAC address */
     rt_pkt_t pkt;
@@ -82,10 +86,13 @@ typedef struct rt_ipv4_ar_s {
 
 /**********************************************************************/
 /* Local Address Resolution database */
+
 typedef struct rt_lat_s {
     struct rt_lat_s *prev, *next;
+    /* Key */
     rt_port_info_t *pi;
     rt_ipv4_addr_t ipaddr;
+    /* Result */
     uint32_t flags;
     rt_eth_addr_t hwaddr; /* Local MAC address */
 } rt_lat_t;
