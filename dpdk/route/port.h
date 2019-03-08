@@ -2,13 +2,13 @@
 #define __RT_PORT_H__
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "stats.h"
 #include "defines.h"
 
 #define RT_RD_DEFAULT (1)
 
-#include <stdio.h>
 extern FILE *rt_log_fd;
 
 /* Queue Descriptor */
@@ -46,7 +46,7 @@ typedef struct {
     rt_lcore_id_t       tx_lcore;
 } rt_port_info_t;
 
-/* Queue List to process on RX */
+/* Per-Thread Queue List to process on RX */
 typedef struct {
     int count;
     rt_queue_t list[0];
@@ -58,6 +58,7 @@ typedef struct {
 
 #define RT_PORT_LCORE_UNASSIGNED    (255)
 
+#define RT_PORT_DIR_UNDEF   0
 #define RT_PORT_DIR_RX      1
 #define RT_PORT_DIR_TX      2
 

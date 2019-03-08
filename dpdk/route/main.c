@@ -188,18 +188,16 @@ int
 main (int argc, char **argv)
 {
     struct rte_eth_dev_info dev_info;
-    int ret;
+    int rc;
     uint8_t nb_ports;
-    uint8_t portid;
     rt_lcore_id_t lcore_id;
-    unsigned nb_ports_in_mask = 0;
 
     /* init EAL */
-    ret = rte_eal_init(argc, argv);
-    if (ret < 0)
+    rc = rte_eal_init(argc, argv);
+    if (rc < 0)
         rte_exit(EXIT_FAILURE, "Invalid EAL arguments\n");
-    argc -= ret;
-    argv += ret;
+    argc -= rc;
+    argv += rc;
 
     g.force_quit = false;
     signal(SIGINT, signal_handler);
@@ -215,8 +213,8 @@ main (int argc, char **argv)
     rt_ar_table_init();
 
     /* parse application arguments (after the EAL ones) */
-    ret = rt_parse_args(argc, argv);
-    if (ret < 0)
+    rc = rt_parse_args(argc, argv);
+    if (rc < 0)
         return -1;
 
     /* convert to number of cycles */
@@ -233,14 +231,8 @@ main (int argc, char **argv)
     /*
      * Each logical core is assigned a dedicated TX queue on each port.
      */
-    for (portid = 0; portid < nb_ports; portid++) {
-        /* skip ports that are not enabled */
-        if (!port_enabled(portid))
-            continue;
-
-        nb_ports_in_mask++;
-
-        rte_eth_dev_info_get(portid, &dev_info);
+    FOREACH_PORT(prtidx) {
+        rte_eth_dev_info_get(prtidx, &dev_info);
     }
 
     int mbuf_count = rt_port_desc_count()
@@ -258,8 +250,8 @@ main (int argc, char **argv)
     rt_lcore_default_assign(RT_PORT_DIR_RX);
     rt_lcore_default_assign(RT_PORT_DIR_TX);
 
-    ret = rt_port_check_lcores();
-    if (ret < 0)
+    rc = rt_port_check_lcores();
+    if (rc < 0)
         rte_exit(EXIT_FAILURE, "port-pinning is using unavailable lcores\n");
 
     log_port_lcore_assignment();
@@ -268,25 +260,26 @@ main (int argc, char **argv)
 
     rt_check_all_ports_link_status();
 
-    ret = 0;
+    rc = 0;
+
     /* launch per-lcore init on every lcore */
     rte_eal_mp_remote_launch(rt_launch_one_lcore, NULL, CALL_MASTER);
+
     RTE_LCORE_FOREACH_SLAVE(lcore_id) {
         if (rte_eal_wait_lcore(lcore_id) < 0) {
-            ret = -1;
+            rc = -1;
             break;
         }
     }
 
-    for (portid = 0; portid < nb_ports; portid++) {
-        if (!port_enabled(portid))
-            continue;
-        printf("Closing port %d...", portid);
-        rte_eth_dev_stop(portid);
-        rte_eth_dev_close(portid);
+    FOREACH_PORT(prtidx) {
+        printf("Closing port %d...", prtidx);
+        rte_eth_dev_stop(prtidx);
+        rte_eth_dev_close(prtidx);
         printf(" Done\n");
     }
+
     printf("Bye...\n");
 
-    return ret;
+    return rc;
 }

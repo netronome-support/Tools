@@ -17,13 +17,11 @@ extern struct rte_mempool * rt_pktmbuf_pool;
 int
 rt_port_setup (void)
 {
-    //rt_port_index_t prtidx;
     rt_queue_index_t qidx;
     int rc;
     struct rte_eth_dev_tx_buffer *tx_buffer;
 
     /* Initialise each port */
-    //for (prtidx = 0 ; prtidx < RTE_MAX_ETHPORTS ; prtidx++) {
     FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
 
@@ -32,12 +30,16 @@ rt_port_setup (void)
             prtidx, pi->rx_q_count, pi->tx_q_count);
         fflush(stdout);
 
-        struct rte_eth_conf port_conf;
-        memset(&port_conf, 0, sizeof(port_conf));
+        struct rte_eth_conf prtcfg;
+        memset(&prtcfg, 0, sizeof(prtcfg));
+
+        if (pi->rx_q_count > 1) {
+            prtcfg.rxmode.mq_mode = ETH_MQ_RX_RSS;
+        }
 
         rc = rte_eth_dev_configure(prtidx,
             pi->rx_q_count, pi->tx_q_count,
-            &port_conf);
+            &prtcfg);
         if (rc < 0) {
             rte_exit(EXIT_FAILURE,
                 "Cannot configure device: rc=%d, port=%u\n",
@@ -117,7 +119,8 @@ int rt_port_desc_count (void)
     FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         if (pi->flags & RT_PORT_F_EXIST) {
-            count += pi->rx_desc_cnt + pi->tx_desc_cnt;
+            count += pi->rx_q_count * pi->rx_desc_cnt
+                   + pi->tx_q_count * pi->tx_desc_cnt;
         }
     }
 

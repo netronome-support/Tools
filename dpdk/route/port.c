@@ -12,9 +12,11 @@ void
 rt_port_dump_info (rt_port_index_t prtidx)
 {
     rt_port_info_t *pi = rt_port_lookup(prtidx);
-    char ts[32];
-    dbgmsg(INFO, nopkt, "Port %d: %s", prtidx,
-        rt_hwaddr_str(ts, pi->hwaddr));
+    char ts1[32], ts2[32];
+    dbgmsg(INFO, nopkt, "Port %u (rd=%u,rxqc=%u,txqc=%u): %s %s", prtidx,
+        pi->rdidx, pi->rx_q_count, pi->tx_q_count,
+        rt_hwaddr_str(ts1, pi->hwaddr),
+        rt_prefix_str(ts2, pi->prefix));
 }
 
 void
