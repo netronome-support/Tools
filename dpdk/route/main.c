@@ -71,6 +71,7 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 
+#include "defines.h"
 #include "functions.h"
 #include "pktutils.h"
 #include "dbgmsg.h"
@@ -80,35 +81,12 @@
 
 rt_global_t g;
 
-static volatile bool force_quit;
-
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
 #define MEMPOOL_CACHE_SIZE 256
 
-/*
- * Configurable number of RX/TX ring descriptors
- */
-#define RTE_TEST_RX_DESC_DEFAULT 2048
-#define RTE_TEST_TX_DESC_DEFAULT 2048
-static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
-static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
-
-#define RTE_MBUF_DESC_MARGIN    16384
-
-/* ethernet addresses of ports */
-static struct ether_addr rt_ports_eth_addr[RTE_MAX_ETHPORTS];
-
 tx_ring_set_t *grs = NULL;
-
-struct lcore_queue_conf {
-    unsigned n_rx_port;
-    unsigned rx_port_list[MAX_RX_QUEUE_PER_LCORE];
-} __rte_cache_aligned;
-struct lcore_queue_conf lcore_queue_conf[RTE_MAX_LCORE];
-
-static struct rte_eth_dev_tx_buffer *tx_buffer[RTE_MAX_ETHPORTS];
 
 struct rte_mempool * rt_pktmbuf_pool = NULL;
 
@@ -138,7 +116,7 @@ rt_main_loop (void)
 
     RTE_LOG(INFO, ROUTE, "entering main loop on lcore %u\n", lcore_id);
 
-    while (!force_quit) {
+    while (!g.force_quit) {
 
         cur_tsc = rte_rdtsc();
 
@@ -197,71 +175,12 @@ rt_launch_one_lcore (__attribute__((unused)) void *dummy)
     return 0;
 }
 
-/* Check the link status of all ports in up to 9s, and print them finally */
-static void
-check_all_ports_link_status (uint8_t port_num)
-{
-    #define CHECK_INTERVAL 100 /* 100ms */
-    #define MAX_CHECK_TIME 90 /* 9s (90 * 100ms) in total */
-    uint8_t portid, count, all_ports_up, print_flag = 0;
-    struct rte_eth_link link;
-
-    printf("\nChecking link status");
-    fflush(stdout);
-    for (count = 0; count <= MAX_CHECK_TIME; count++) {
-        if (force_quit)
-            return;
-        all_ports_up = 1;
-        for (portid = 0; portid < port_num; portid++) {
-            if (force_quit)
-                return;
-            if (!port_enabled(portid))
-                continue;
-            memset(&link, 0, sizeof(link));
-            rte_eth_link_get_nowait(portid, &link);
-            /* print link status if flag set */
-            if (print_flag == 1) {
-                if (link.link_status)
-                    printf("Port %d Link Up - speed %u "
-                        "Mbps - %s\n", (uint8_t)portid,
-                        (unsigned)link.link_speed,
-                (link.link_duplex == ETH_LINK_FULL_DUPLEX) ?
-                    ("full-duplex") : ("half-duplex\n"));
-                else
-                    printf("Port %d Link Down\n",
-                        (uint8_t)portid);
-                continue;
-            }
-            /* clear all_ports_up flag if any link down */
-            if (link.link_status == ETH_LINK_DOWN) {
-                all_ports_up = 0;
-                break;
-            }
-        }
-        /* after finally printing all link status, get out */
-        if (print_flag == 1)
-            break;
-
-        if (all_ports_up == 0) {
-            printf(".");
-            fflush(stdout);
-            rte_delay_ms(CHECK_INTERVAL);
-        }
-
-        /* set the print_flag if all ports up or timeout */
-        if (all_ports_up == 1 || count == (MAX_CHECK_TIME - 1)) {
-            print_flag = 1;
-            printf("done\n");
-        }
-    }
-}
-
 static void
 signal_handler (int signum)
 {
     if (signum == SIGINT || signum == SIGTERM) {
         printf("\n\nSignal %d received, preparing to exit...\n", signum);
-        force_quit = true;
+        g.force_quit = true;
     }
 }
 
@@ -271,7 +190,6 @@ main (int argc, char **argv)
     struct rte_eth_dev_info dev_info;
     int ret;
     uint8_t nb_ports;
-    uint8_t nb_ports_available;
     uint8_t portid;
     rt_lcore_id_t lcore_id;
     unsigned nb_ports_in_mask = 0;
@@ -283,7 +201,7 @@ main (int argc, char **argv)
     argc -= ret;
     argv += ret;
 
-    force_quit = false;
+    g.force_quit = false;
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
@@ -325,23 +243,20 @@ main (int argc, char **argv)
         rte_eth_dev_info_get(portid, &dev_info);
     }
 
-    int nb_mbuf = nb_ports_in_mask * (nb_rxd + nb_txd)
+    int mbuf_count = rt_port_desc_count()
         + RTE_MBUF_DESC_MARGIN;
 
     /* create the mbuf pool */
-    rt_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", nb_mbuf,
+    rt_pktmbuf_pool = rte_pktmbuf_pool_create("mbuf_pool", mbuf_count,
         MEMPOOL_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE,
         rte_socket_id());
     if (rt_pktmbuf_pool == NULL)
         rte_exit(EXIT_FAILURE, "Cannot init mbuf pool\n");
 
-    nb_ports_available = nb_ports;
-
     grs = create_global_ring_set(nb_ports);
 
-    rt_lcore_default_assign(RT_PORT_DIR_RX, nb_ports);
-
-    rt_lcore_default_assign(RT_PORT_DIR_TX, nb_ports);
+    rt_lcore_default_assign(RT_PORT_DIR_RX);
+    rt_lcore_default_assign(RT_PORT_DIR_TX);
 
     ret = rt_port_check_lcores();
     if (ret < 0)
@@ -349,84 +264,9 @@ main (int argc, char **argv)
 
     log_port_lcore_assignment();
 
-    /* Initialise each port */
-    for (portid = 0; portid < nb_ports; portid++) {
-        /* skip ports that are not enabled */
-        if (!port_enabled(portid)) {
-            printf("Skipping disabled port %u\n", (unsigned) portid);
-            nb_ports_available--;
-            continue;
-        }
-        /* init port */
-        printf("Initializing port %u... ", (unsigned) portid);
-        fflush(stdout);
-        struct rte_eth_conf port_conf;
-        memset(&port_conf, 0, sizeof(port_conf));
+    rt_port_setup();
 
-        ret = rte_eth_dev_configure(portid,
-             /* nb_rx_queue = */ 1,
-             /* nb_tx_queue = */ 1,
-             &port_conf);
-        if (ret < 0)
-            rte_exit(EXIT_FAILURE, "Cannot configure device: err=%d, port=%u\n",
-                  ret, (unsigned) portid);
-
-        rte_eth_macaddr_get(portid, &rt_ports_eth_addr[portid]);
-
-        /* init one RX queue */
-        fflush(stdout);
-        ret = rte_eth_rx_queue_setup(portid, 0, nb_rxd,
-            rte_eth_dev_socket_id(portid),
-            NULL, rt_pktmbuf_pool);
-        if (ret < 0)
-            rte_exit(EXIT_FAILURE, "rte_eth_rx_queue_setup:err=%d, port=%u\n",
-                ret, (unsigned) portid);
-
-        /* init one TX queue on each port */
-        fflush(stdout);
-        ret = rte_eth_tx_queue_setup(portid, 0, nb_txd,
-            rte_eth_dev_socket_id(portid), NULL);
-        if (ret < 0)
-            rte_exit(EXIT_FAILURE, "rte_eth_tx_queue_setup:err=%d, port=%u\n",
-                ret, (unsigned) portid);
-
-        /* Initialize TX buffers */
-        tx_buffer[portid] = rte_zmalloc_socket("tx_buffer",
-                RTE_ETH_TX_BUFFER_SIZE(MAX_PKT_BURST), 0,
-                rte_eth_dev_socket_id(portid));
-        if (tx_buffer[portid] == NULL)
-            rte_exit(EXIT_FAILURE, "Cannot allocate buffer for tx on port %u\n",
-                    (unsigned) portid);
-
-        rte_eth_tx_buffer_init(tx_buffer[portid], MAX_PKT_BURST);
-
-        ret = rte_eth_tx_buffer_set_err_callback(tx_buffer[portid],
-            rte_eth_tx_buffer_count_callback,
-            &port_statistics[portid].qfull);
-        if (ret < 0)
-            rte_exit(EXIT_FAILURE, "Cannot set error callback for "
-                "tx buffer on port %u\n", (unsigned) portid);
-
-        /* Start device */
-        ret = rte_eth_dev_start(portid);
-        if (ret < 0)
-            rte_exit(EXIT_FAILURE, "rte_eth_dev_start:err=%d, port=%u\n",
-                  ret, (unsigned) portid);
-
-        printf("done: \n");
-
-        rt_port_create(portid, rt_ports_eth_addr[portid].addr_bytes,
-            tx_buffer[portid]);
-
-        rte_eth_promiscuous_enable(portid);
-    }
-
-    if (!nb_ports_available) {
-        rte_exit(EXIT_FAILURE,
-            "All available ports are disabled. Please set portmask.\n");
-    }
-
-    check_all_ports_link_status(nb_ports);
+    rt_check_all_ports_link_status();
 
     ret = 0;
     /* launch per-lcore init on every lcore */

@@ -6,21 +6,15 @@
 #include "dbgmsg.h"
 #include "functions.h"
 
-rt_port_info_t rt_port_table[RT_PORT_MAX];
+rt_port_info_t rt_port_table[RT_MAX_PORT_COUNT];
 
 void
-rt_port_create (rt_port_index_t port, void *hwaddr, void *tx_buffer)
+rt_port_dump_info (rt_port_index_t prtidx)
 {
-    rt_port_info_t *pi = rt_port_lookup(port);
-    assert(tx_buffer != NULL);
-    pi->flags |= RT_PORT_F_EXIST;
-    pi->idx = port;
-    /* Assign Port to default routing domain */
-    pi->rdidx = RT_RD_DEFAULT;
-    memcpy(&pi->hwaddr, hwaddr, 6);
-    pi->tx_buffer = tx_buffer;
+    rt_port_info_t *pi = rt_port_lookup(prtidx);
     char ts[32];
-    dbgmsg(INFO, nopkt, "Port %d: %s", port, rt_hwaddr_str(ts, hwaddr));
+    dbgmsg(INFO, nopkt, "Port %d: %s", prtidx,
+        rt_hwaddr_str(ts, pi->hwaddr));
 }
 
 void
@@ -83,13 +77,10 @@ find_next_lcore_index (rt_lcore_id_t lcore_id)
 }
 
 void
-rt_lcore_default_assign (int direction, int nb_ports)
+rt_lcore_default_assign (int direction)
 {
     rt_lcore_id_t lcore_next_idx = 0;
-    int prtidx;
-    for (prtidx = 0 ; prtidx <= nb_ports ; prtidx++) {
-        if (!port_enabled(prtidx))
-            continue;
+    FOREACH_PORT(prtidx) {
         /* Skip if the port is already assigned */
         rt_lcore_id_t c_lcore = rt_port_query_lcore(prtidx, direction);
         if (c_lcore != RT_PORT_LCORE_UNASSIGNED)
@@ -104,9 +95,8 @@ rt_queue_list_t *
 create_thread_rx_queue_list (rt_lcore_id_t lcore)
 {
     int qcount = 0;
-    int prtidx;
     /* Count the number of ports needed */
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+    FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         if (pi->rx_lcore == lcore) {
             qcount++;
@@ -118,7 +108,7 @@ create_thread_rx_queue_list (rt_lcore_id_t lcore)
     assert(qlist != NULL);
     qlist->count = qcount;
     rt_queue_t *qp = &qlist->list[0];
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+    FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         if (pi->rx_lcore == lcore) {
             qp->prtidx = prtidx;
@@ -132,10 +122,7 @@ create_thread_rx_queue_list (rt_lcore_id_t lcore)
 int
 rt_port_check_lcores (void)
 {
-    rt_port_index_t prtidx;
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
-        if (!port_enabled(prtidx))
-            continue;
+    FOREACH_PORT(prtidx) {
         int dir;
         for (dir = RT_PORT_DIR_RX ; dir <= RT_PORT_DIR_TX ; dir++) {
             rt_lcore_id_t lcore = rt_port_query_lcore(prtidx, dir);
@@ -151,10 +138,7 @@ rt_port_check_lcores (void)
 void
 log_port_lcore_assignment (void)
 {
-    rt_port_index_t prtidx;
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
-        if (!port_enabled(prtidx))
-            continue;
+    FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         dbgmsg(CONF, nopkt, "Port %u lcore assignment: RX: %u, TX: %u",
             prtidx, pi->rx_lcore, pi->tx_lcore);
@@ -164,8 +148,7 @@ log_port_lcore_assignment (void)
 void
 rt_port_periodic (void)
 {
-    rt_port_index_t prtidx;
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+    FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         if (pi->flags & RT_PORT_F_EXIST) {
             if (pi->flags & RT_PORT_F_GRATARP) {
@@ -179,12 +162,16 @@ void
 rt_port_table_init (void)
 {
     int prtidx;
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+    for (prtidx = 0 ; prtidx < RT_MAX_PORT_COUNT ; prtidx++) {
         memset(&rt_port_table[prtidx], 0, sizeof(rt_port_info_t));
         rt_port_info_t *pi = rt_port_lookup(prtidx);
         pi->idx = prtidx;
         pi->rdidx = RT_RD_DEFAULT;
+        pi->rx_q_count = 1;
+        pi->tx_q_count = 1;
         pi->rx_lcore = RT_PORT_LCORE_UNASSIGNED;
         pi->tx_lcore = RT_PORT_LCORE_UNASSIGNED;
+        pi->rx_desc_cnt = RTE_RX_DESC_DEFAULT;
+        pi->tx_desc_cnt = RTE_TX_DESC_DEFAULT;
     }
 }

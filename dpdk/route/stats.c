@@ -2,6 +2,7 @@
 #include <inttypes.h>
 
 #include "stats.h"
+#include "port.h"
 
 struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
 
@@ -40,8 +41,6 @@ print_load_statistics (int prtidx)
 void
 print_stats (void)
 {
-    int prtidx;
-
     struct rt_port_statistics ts;
     memset(&ts, 0, sizeof(ts));
 
@@ -61,10 +60,8 @@ print_stats (void)
     #define fmt_s "%10"PRIu64
     #define fmt fmt_l fmt_l fmt_s fmt_s fmt_s fmt_s
 
-    for (prtidx = 0 ; prtidx < RTE_MAX_ETHPORTS ; prtidx++) {
+    FOREACH_PORT(prtidx) {
         /* skip disabled ports */
-        if (!port_enabled(prtidx))
-            continue;
         struct rt_port_statistics *ps = &port_statistics[prtidx];
         printf("%8u" fmt "\n", prtidx,
             ps->rx, ps->tx, ps->qfull, ps->error, ps->disc, ps->term);
@@ -81,10 +78,7 @@ print_stats (void)
     printf("==========================================================="
         "=============\n");
 
-    for (prtidx = 0 ; prtidx < RTE_MAX_ETHPORTS ; prtidx++) {
-        /* skip disabled ports */
-        if (!port_enabled(prtidx))
-            continue;
+    FOREACH_PORT(prtidx) {
         print_load_statistics(prtidx);
     }
 

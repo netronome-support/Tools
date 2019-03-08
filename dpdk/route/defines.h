@@ -5,14 +5,21 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
 #define MAX_PKT_BURST 64
 
+#define RT_MAX_PORT_COUNT 32
+
+#define RTE_RX_DESC_DEFAULT 2048
+#define RTE_TX_DESC_DEFAULT 2048
+
+#define RTE_MBUF_DESC_MARGIN 16384
+
 /* Network Byte Order Ethernet Hardware (MAC) Address */
-//typedef uint64_t rt_eth_addr_t;
 typedef uint8_t rt_eth_addr_t[6];
 
 typedef uint8_t rt_port_index_t;
@@ -31,6 +38,7 @@ typedef uint16_t rt_rd_t;
 
 /* Global Variables */
 typedef struct {
+    bool force_quit;
     int ping_nexthops;
     int print_statistics;
     /* A tsc-based timer responsible for triggering statistics printout */

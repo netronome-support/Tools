@@ -286,7 +286,7 @@ static int
 port_set_promisc_flag (const char *argstr)
 {
     int prtidx = strtol(argstr, NULL, 10);
-    if (prtidx >= RT_PORT_MAX) {
+    if (prtidx >= RT_MAX_PORT_COUNT) {
         fprintf(stderr, "ERROR: port index (%d) out of range\n",
             prtidx);
         return -1;

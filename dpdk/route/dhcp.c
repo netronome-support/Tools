@@ -171,11 +171,8 @@ rt_dhcp_transmit (rt_port_info_t *pi, rt_dhcp_info_t *info, uint8_t msgtype)
 void
 rt_dhcp_discover (void)
 {
-    int prtidx;
-    for (prtidx = 0 ; prtidx < RT_PORT_MAX ; prtidx++) {
+    FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
-        if (!(pi->flags & RT_PORT_F_EXIST))
-            continue;
         if (pi->rdidx == 0)
             continue;
         if (pi->ipaddr == 0) {

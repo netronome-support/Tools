@@ -43,8 +43,9 @@ APP = route
 
 # all source are stored in SRCS-y
 SRCS-y := main.c stats.c
+SRCS-y += port.c port-setup.c
 SRCS-y += forward.c arp.c icmp.c pktutils.c dhcp.c
-SRCS-y += tables.c dbgmsg.c port.c argparse.c
+SRCS-y += tables.c dbgmsg.c argparse.c
 SRCS-y += rings.c
 
 CFLAGS += -O3

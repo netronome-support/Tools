@@ -34,6 +34,12 @@ typedef struct {
     rt_ipv4_prefix_t    prefix;
     rt_ipv4_addr_t      ipaddr;
     void                *tx_buffer;
+    /* Queue count */
+    uint8_t             rx_q_count;
+    uint8_t             tx_q_count;
+    /* Per-Queue Descriptor Counts */
+    int                 rx_desc_cnt;
+    int                 tx_desc_cnt;
     rt_cnt_idx_t        cntidx;
     rt_dhcp_info_t      dhcpinfo;
     rt_lcore_id_t       rx_lcore;
@@ -55,18 +61,18 @@ typedef struct {
 #define RT_PORT_DIR_RX      1
 #define RT_PORT_DIR_TX      2
 
-#define RT_PORT_MAX 32
-extern rt_port_info_t rt_port_table[RT_PORT_MAX];
+extern rt_port_info_t rt_port_table[RT_MAX_PORT_COUNT];
+
+#define FOREACH_PORT(prtidx) \
+    for (rt_port_index_t  prtidx = 0 ; prtidx < RT_MAX_PORT_COUNT ; prtidx++) \
+        if (port_enabled(prtidx))
 
 static inline rt_port_info_t *
-rt_port_lookup (rt_port_index_t port)
+rt_port_lookup (rt_port_index_t prtidx)
 {
-    assert(port < RT_PORT_MAX);
-    return &rt_port_table[port];
+    assert(prtidx < RT_MAX_PORT_COUNT);
+    return &rt_port_table[prtidx];
 }
-
-void rt_port_create (rt_port_index_t port, void *hwaddr,
-    void *tx_buffer);
 
 void rt_port_set_routing_domain (rt_port_index_t port, rt_rd_t rdidx);
 
@@ -76,13 +82,19 @@ void rt_port_set_ipv4_addr (rt_port_index_t port, rt_ipv4_addr_t addr,
 void rt_port_set_ip_addr (rt_port_index_t port,
     const char *str, int len);
 
+void rt_port_dump_info (rt_port_index_t prtidx);
 void rt_port_assign_thread (int prtidx, int direction, rt_lcore_id_t lcore);
-void rt_lcore_default_assign (int dir, int cnt);
+void rt_lcore_default_assign (int dir);
 rt_queue_list_t *create_thread_rx_queue_list (rt_lcore_id_t lcore);
 int rt_port_check_lcores (void);
 void log_port_lcore_assignment (void);
 void rt_port_periodic (void);
 
-extern void rt_port_table_init (void);
+void rt_port_table_init (void);
+
+/* port-setup.c */
+int rt_port_setup (void);
+int rt_port_desc_count (void);
+void rt_check_all_ports_link_status (void);
 
 #endif
