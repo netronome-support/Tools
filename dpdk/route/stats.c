@@ -4,28 +4,28 @@
 #include "stats.h"
 #include "port.h"
 
-struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
+rt_port_stats_t port_statistics[RTE_MAX_ETHPORTS];
 
 void
 print_load_statistics (int prtidx)
 {
-    struct load_statistics delta;
-    struct load_statistics *nlsp = &port_statistics[prtidx].ls;
-    struct load_statistics *olsp = &port_statistics[prtidx].prev;
+    rt_load_stats_t delta;
+    rt_load_stats_t *nlsp = &port_statistics[prtidx].ls;
+    rt_load_stats_t *olsp = &port_statistics[prtidx].prev;
     uint64_t total = 0;
     int i;
     for (i = 0 ; i < LS_COUNTERS ; i++ ) {
         delta.cnt[i] = nlsp->cnt[i] - olsp->cnt[i];
         total += delta.cnt[i];
     }
-    printf("Load %3u:  ", prtidx);
-    for (i = 0 ; i < 4 ; i++ ) {
+    printf("  %3u: ", prtidx);
+    for (i = 0 ; i < LS_COUNTERS ; i++ ) {
         char numstr[32] = "";
         if (total > 0) {
             sprintf(numstr, "%5.1f%%", 100.0 * 
                 ((double) delta.cnt[i]) / ((double) total));
         }
-        printf("  %c: %-6s%s", ("ESPF")[i], numstr,
+        printf(" %c: %-6s%s", ("ESPF")[i], numstr,
             (i < (LS_COUNTERS - 1)) ? ", " : ""
         );
     }
@@ -34,6 +34,9 @@ print_load_statistics (int prtidx)
             (double) nlsp->cnt[LS_PKTCNT] 
             / (double) nlsp->cnt[LS_PARTIAL]);
     }
+    for (i = 0 ; i < LS_COUNTERS ; i++ ) {
+        olsp->cnt[i] = nlsp->cnt[i];
+    }
     printf("\n");
 }
 
@@ -41,7 +44,8 @@ print_load_statistics (int prtidx)
 void
 print_stats (void)
 {
-    struct rt_port_statistics ts;
+    int idx;
+    rt_port_stats_t ts;
     memset(&ts, 0, sizeof(ts));
 
     const char clr[] = { 27, '[', '2', 'J', '\0' };
@@ -51,39 +55,42 @@ print_stats (void)
     printf("%s%s", clr, topLeft);
 
     printf("\n==  Statistics  ========================================="
-        "===============\n");
+        "=================\n");
 
-    printf("%8s%12s%12s%10s%10s%10s%10s\n",
-        "Port", "RX", "TX", "QFULL", "ERROR", "DISC", "TERM");     
+    printf("%5s%12s%12s%9s%9s%9s%9s%9s\n",
+        "Port", "RX", "TX", "QFULL", "DROP", "TERM", "ERROR", "IGNORE");     
 
     #define fmt_l "%12"PRIu64
-    #define fmt_s "%10"PRIu64
+    #define fmt_s "%9"PRIu64
     #define fmt fmt_l fmt_l fmt_s fmt_s fmt_s fmt_s
 
     FOREACH_PORT(prtidx) {
         /* skip disabled ports */
-        struct rt_port_statistics *ps = &port_statistics[prtidx];
-        printf("%8u" fmt "\n", prtidx,
-            ps->rx, ps->tx, ps->qfull, ps->error, ps->disc, ps->term);
+        rt_port_stats_t *ps = &port_statistics[prtidx];
+        printf("%5u" fmt_l fmt_l, prtidx, ps->rx, ps->tx);
+        for (idx = 0 ; idx < RT_DISC_REASONS ; idx++) {
+            printf(fmt_s, ts.disc[idx]);
+            ts.disc[idx] += ps->disc[idx];
+        }
         ts.rx       += ps->rx;
         ts.tx       += ps->tx;
-        ts.qfull    += ps->qfull;
-        ts.error    += ps->error;
-        ts.disc     += ps->disc;
-        ts.term     += ps->term;
+        printf("\n");
     }
-    printf("%8s" fmt "\n", "TOTAL",
-        ts.rx, ts.tx, ts.qfull, ts.error, ts.disc, ts.term);
+    printf("%5s" fmt_l fmt_l, "TOTAL",
+        ts.rx, ts.tx);
+    for (idx = 0 ; idx < RT_DISC_REASONS ; idx++)
+        printf(fmt_s, ts.disc[idx]);
+    printf("\n");
 
     printf("==========================================================="
-        "=============\n");
+        "===============\n");
 
     FOREACH_PORT(prtidx) {
         print_load_statistics(prtidx);
     }
 
     printf("==========================================================="
-        "=============\n");
+        "===============\n");
 }
 
 void rt_stats_init (void)

@@ -46,44 +46,16 @@ void rt_pkt_create (rt_pkt_t *pkt);
 void rt_pkt_send (rt_pkt_t pkt, rt_port_info_t *pi);
 
 /*
- * Discard and update DISC counter
+ * Discard and update 'discard reason' counter
  */
 static inline void
-rt_pkt_discard (rt_pkt_t pkt)
+rt_pkt_discard (rt_pkt_t pkt, rt_disc_cause_t reason)
 {
     assert(pkt.mbuf != NULL);
     rte_pktmbuf_free(pkt.mbuf);
     pkt.mbuf = NULL;
     if (pkt.pi != NULL) {
-        port_statistics[pkt.pi->idx].disc++;
-    }
-}
-
-/*
- * Discard and update ERROR counter
- */
-static inline void
-rt_pkt_discard_error (rt_pkt_t pkt)
-{
-    assert(pkt.mbuf != NULL);
-    rte_pktmbuf_free(pkt.mbuf);
-    pkt.mbuf = NULL;
-    if (pkt.pi != NULL) {
-        port_statistics[pkt.pi->idx].error++;
-    }
-}
-
-/*
- * Discard and update TERM counter
- */
-static inline void
-rt_pkt_terminate (rt_pkt_t pkt)
-{
-    assert(pkt.mbuf != NULL);
-    rte_pktmbuf_free(pkt.mbuf);
-    pkt.mbuf = NULL;
-    if (pkt.pi != NULL) {
-        port_statistics[pkt.pi->idx].term++;
+        port_statistics[pkt.pi->idx].disc[reason]++;
     }
 }
 

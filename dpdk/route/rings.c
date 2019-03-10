@@ -149,7 +149,8 @@ flush_thread_ring_set (tx_ring_set_t *trs)
                     "TX FULL (Prt %u, Disc %u)",
                     prtidx, sndcnt < pktcnt);
                 pktmbuf_free_bulk(&mbufs[sndcnt], pktcnt - sndcnt);
-                port_statistics[prtidx].qfull += pktcnt - sndcnt;
+                port_statistics[prtidx].disc[RT_DISC_QFULL]
+                    += pktcnt - sndcnt;
                 break;
             }
             port_statistics[prtidx].tx += sndcnt;

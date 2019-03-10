@@ -32,7 +32,7 @@ rt_pkt_ipv4_local_process (rt_pkt_t pkt)
         rt_ipaddr_str(t1, ntohl(*PTR(pkt.pp.l3, uint32_t, 12))),
         proto);
 
-    rt_pkt_terminate(pkt);
+    rt_pkt_discard(pkt, RT_DISC_TERM);
 }
 
 void
@@ -62,13 +62,14 @@ void
 rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 {
     rt_rd_t rdidx = pkt.rdidx;
+    rt_disc_cause_t reason = RT_DISC_DROP;
     rt_lpm_t *rt = rt_lpm_lookup(rdidx, ipda);
     if (rt == NULL) {
         /* No Route - Discard */
         dbgmsg(WARN, pkt, "IPv4 NO ROUTE for (%u) %s",
             rdidx, rt_ipaddr_nr_str(ipda));
-        rt_pkt_discard_error(pkt);
-        return;
+        reason = RT_DISC_DROP;
+        goto Discard;
     }
 
     uint32_t rt_flags = rt->flags;
@@ -83,8 +84,8 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
         if (pkt.pi != NULL) {
             rt_pkt_setup_dt(pkt.pi, ipda, rt, NULL);
         }
-        rt_pkt_discard(pkt);
-        return;
+        reason = RT_DISC_DROP;
+        goto Discard;
     }
 
     if (flags & PKT_SEND_F_UPDATE_IPSA) {
@@ -102,8 +103,8 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
     } else {
         dbgmsg(WARN, pkt, "Route Table Confusion (%u) %s",
             rdidx, rt_ipaddr_nr_str(ipda));
-        rt_pkt_discard_error(pkt);
-        return;
+        reason = RT_DISC_ERROR;
+        goto Discard;
     }
 
     rt_ipv4_ar_t *ar = rt_ipv4_ar_lookup(rt->pi, nhipa);
@@ -119,6 +120,10 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
     rt_pkt_set_hw_addrs(pkt, rt->pi, ar->hwaddr);
 
     rt_pkt_send(pkt, rt->pi);
+    return;
+
+  Discard:
+    rt_pkt_discard(pkt, reason);
 }
 
 static inline void
@@ -147,13 +152,13 @@ rt_pkt_dt_process (rt_pkt_t pkt, rt_dt_route_t *drp)
 {
     if (unlikely(drp->flags)) {
         if (drp->flags & RT_FWD_F_DISCARD) {
-            rt_pkt_discard(pkt);
+            rt_pkt_discard(pkt, RT_DISC_DROP);
             return;
         }
         if (drp->flags & RT_FWD_F_RANDDISC) {
             uint64_t rnd = (uint64_t) (uint32_t) rte_rand();
             if (rnd < g.rand_disc_level) {
-                rt_pkt_discard(pkt);
+                rt_pkt_discard(pkt, RT_DISC_DROP);
                 return;
             }
         }
@@ -173,6 +178,7 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
     pkt.rdidx = pkt.pi->rdidx;
     pkt.mbuf = mbuf;
     pkt.eth = rte_pktmbuf_mtod(mbuf, void *);
+    rt_disc_cause_t reason = RT_DISC_IGNORE;
 
     uint16_t ethtype = ntohs(pkt.eth->ethtype);
 
@@ -194,37 +200,34 @@ rt_pkt_process (int port, struct rte_mbuf *mbuf)
 
     if (likely(rt_pkt_is_unicast(pkt))) {
         /* Unicast - Compare Destination MAC address */
-        if (rt_eth_addr_compare(&pkt.eth->dst, &pkt.pi->hwaddr)
-                || (pkt.pi->flags & RT_PORT_F_PROMISC)) {
-            /* Check for IPv4 */
-            if (likely(ethtype == 0x0800)) {
-                rt_pkt_ipv4_process(pkt, ipda);
-                return;
-            } else
-            if (ethtype == 0x0806) {
-                rt_arp_process(pkt);
-                return;
-            }
-            dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
-                ethtype);
-        } else {
+        if (!rt_eth_addr_compare(&pkt.eth->dst, &pkt.pi->hwaddr)
+                && !(pkt.pi->flags & RT_PORT_F_PROMISC)) {
             char ts[32];
             dbgmsg(DEBUG, pkt, "wrong destination MAC %s",
                 rt_hwaddr_str(ts, pkt.eth->dst));
+            reason = RT_DISC_IGNORE;
+            goto Discard;
         }
-    } else {
-        /* Broadcast or Multicast */
-        if (ethtype == 0x0800) {
-            rt_pkt_ipv4_process(pkt, ipda);
-            return;
-        } else
-        if (ethtype == 0x0806) {
-            rt_arp_process(pkt);
-            return;
-        }
-        dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
-            ethtype);
     }
 
-    rt_pkt_discard_error(pkt);
+    /* Check for IPv4 */
+    if (likely(ethtype == 0x0800)) {
+        rt_pkt_ipv4_process(pkt, ipda);
+        return;
+    }
+    if (ethtype == 0x0806) {
+        rt_arp_process(pkt);
+        return;
+    }
+    if (ethtype == 0x086dd) {
+        dbgmsg(DEBUG, pkt, "ignoring IPv6");
+        reason = RT_DISC_IGNORE;
+        goto Discard;
+    }
+    dbgmsg(DEBUG, pkt, "unsupported ETHTYPE (0x%04x)",
+        ethtype);
+    reason = RT_DISC_IGNORE;
+
+  Discard:
+    rt_pkt_discard(pkt, reason);
 }

@@ -11,8 +11,30 @@
 
 #include "defines.h"
 #include "port.h"
+#include "dbgmsg.h"
 
 extern struct rte_mempool * rt_pktmbuf_pool;
+
+static void
+log_port_info (rt_port_index_t prtidx)
+{
+    struct rte_eth_dev_info di;
+
+    rte_eth_dev_info_get(prtidx, &di);
+
+    dbgmsg(INFO, nopkt, "Port %u:"
+        " drv=%s q=%u,%u"
+        " cap=%lx,%lx spd=%lx rss=%lx reta=%u",
+        prtidx,
+        di.driver_name,
+        di.max_rx_queues,
+        di.max_tx_queues,
+        di.rx_offload_capa,
+        di.tx_offload_capa,
+        di.speed_capa,
+        di.flow_type_rss_offloads,
+        di.reta_size);
+}
 
 int
 rt_port_setup (void)
@@ -29,6 +51,8 @@ rt_port_setup (void)
         printf("Initializing port %u (RX#Q: %u, TX#Q: %u)\n",
             prtidx, pi->rx_q_count, pi->tx_q_count);
         fflush(stdout);
+
+        log_port_info(prtidx);
 
         struct rte_eth_conf prtcfg;
         memset(&prtcfg, 0, sizeof(prtcfg));
@@ -86,7 +110,7 @@ rt_port_setup (void)
 
         rc = rte_eth_tx_buffer_set_err_callback(tx_buffer,
             rte_eth_tx_buffer_count_callback,
-            &port_statistics[prtidx].qfull);
+            &port_statistics[prtidx].disc[RT_DISC_QFULL]);
         if (rc < 0) {
             rte_exit(EXIT_FAILURE,
                 "Cannot set error callback for TX buffer on port %u\n",

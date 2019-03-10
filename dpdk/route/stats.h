@@ -12,25 +12,30 @@ typedef int rt_cnt_idx_t;
 #define LS_PKTCNT   4
 #define LS_COUNTERS 5
 
-struct load_statistics {
+typedef struct {
         uint64_t cnt[LS_COUNTERS];
-};
+} rt_load_stats_t;
+
+typedef uint8_t rt_disc_cause_t;
+#define RT_DISC_QFULL       0
+#define RT_DISC_DROP        1
+#define RT_DISC_ERROR       2
+#define RT_DISC_TERM        3
+#define RT_DISC_IGNORE      4
+#define RT_DISC_REASONS     5
 
 /* Per-port statistics struct */
-struct rt_port_statistics {
+typedef struct {
     uint64_t rx;
     uint64_t tx;
-    uint64_t qfull;
-    uint64_t disc;
-    uint64_t error;
-    uint64_t term;
-    struct load_statistics ls, prev;
-} __rte_cache_aligned;
+    uint64_t disc[RT_DISC_REASONS];
+    rt_load_stats_t ls, prev;
+} rt_port_stats_t;
 
-extern struct rt_port_statistics port_statistics[RTE_MAX_ETHPORTS];
+extern rt_port_stats_t port_statistics[RTE_MAX_ETHPORTS];
 
 static inline void
-update_load_statistics (int portid, int rx_pkt_cnt)
+update_load_statistics (int prtidx, int rx_pkt_cnt)
 {
     int offset;
     if (rx_pkt_cnt == 0) {
@@ -39,11 +44,11 @@ update_load_statistics (int portid, int rx_pkt_cnt)
         offset = LS_SINGLE;
     } else if (rx_pkt_cnt < MAX_PKT_BURST) {
         offset = LS_PARTIAL;
-        port_statistics[portid].ls.cnt[LS_PKTCNT] += rx_pkt_cnt;
+        port_statistics[prtidx].ls.cnt[LS_PKTCNT] += rx_pkt_cnt;
     } else {
         offset = LS_FULL;
     }
-    port_statistics[portid].ls.cnt[offset]++;
+    port_statistics[prtidx].ls.cnt[offset]++;
 }
 
 static int aaaa = 0;

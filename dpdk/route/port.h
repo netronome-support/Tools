@@ -87,6 +87,7 @@ void rt_port_dump_info (rt_port_index_t prtidx);
 void rt_port_assign_thread (int prtidx, int direction, rt_lcore_id_t lcore);
 void rt_lcore_default_assign (int dir);
 rt_queue_list_t *create_thread_rx_queue_list (rt_lcore_id_t lcore);
+void rt_port_log_queue_list (rt_lcore_id_t lcore, const rt_queue_list_t *ql);
 int rt_port_check_lcores (void);
 void log_port_lcore_assignment (void);
 void rt_port_periodic (void);

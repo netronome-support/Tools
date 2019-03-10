@@ -109,7 +109,7 @@ rt_arp_request_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
             " (req: %s, port(%d): %s)",
             rt_ipaddr_str(t0, ap.t_ip_addr), pi->idx,
             rt_ipaddr_str(t1, pi->ipaddr));
-        rt_pkt_terminate(pkt);
+        rt_pkt_discard(pkt, RT_DISC_IGNORE);
         return;
     }
     /* Learn about the sender */
@@ -139,7 +139,7 @@ static inline void
 rt_arp_reply_process (rt_pkt_t pkt, rt_pkt_arp_t ap)
 {
     rt_rd_t rdidx = pkt.rdidx;
-    rt_pkt_terminate(pkt);
+    rt_pkt_discard(pkt, RT_DISC_TERM);
     const char *optstr = "";
 
     rt_lpm_t *rt = rt_lpm_lookup_subnet(rdidx, ap.s_ip_addr);
@@ -166,26 +166,27 @@ rt_arp_process (rt_pkt_t pkt)
 {
     rt_pkt_arp_t ap;
     rt_arp_pkt_ntoh(pkt.pp.l3, &ap);
+    rt_disc_cause_t reason = RT_DISC_ERROR;
 
     if (ap.hw_type != 1) {
         dbgmsg(WARN, pkt, "ARP with bad HW type (0x%04x)",
             ap.hw_type);
-        goto PktError;
+        goto Discard;
     }
     if (ap.protocol != 0x0800) {
         dbgmsg(WARN, pkt, "ARP with bad protocol type (0x%04x)",
             ap.protocol);
-        goto PktError;
+        goto Discard;
     }
     if (ap.hw_addr_length != 6) {
         dbgmsg(WARN, pkt, "ARP with bad HW length (%u)",
             ap.hw_addr_length);
-        goto PktError;
+        goto Discard;
     }
     if (ap.proto_addr_length != 4) {
         dbgmsg(WARN, pkt, "ARP with bad protocol length (%u)",
             ap.proto_addr_length);
-        goto PktError;
+        goto Discard;
     }
 
     switch (ap.opcode) {
@@ -196,12 +197,12 @@ rt_arp_process (rt_pkt_t pkt)
         rt_arp_reply_process(pkt, ap);
         return;
     default:
-        dbgmsg(WARN, pkt, "ARP with bad opcode");
-        goto PktError;
+        dbgmsg(WARN, pkt, "ARP with unsupported opcode (%u)", ap.opcode);
+        goto Discard;
     }
 
-  PktError:
-    rt_pkt_discard_error(pkt);
+  Discard:
+    rt_pkt_discard(pkt, reason);
 }
 
 static inline void
@@ -222,7 +223,7 @@ rt_arp_send_request (rt_pkt_t pkt, rt_port_info_t *pi,
         char ts0[32];
         dbgmsg(WARN, nopkt, "ARP failed - (%u) %s is not in any subnet",
             pkt.rdidx, rt_ipaddr_str(ts0, ipda));
-        rt_pkt_discard_error(pkt);
+        rt_pkt_discard(pkt, RT_DISC_ERROR);
         return;
     }
     ap.s_ip_addr = srt->ifipa;
@@ -282,7 +283,7 @@ rt_arp_generate (rt_pkt_t pkt, rt_ipv4_addr_t ipda, rt_lpm_t *rt)
     assert(ar != NULL);
     rc = rt_ipv4_ar_set_pkt(pkt, ar);
     if (rc != 1) {
-        rt_pkt_discard(pkt);
+        rt_pkt_discard(pkt, RT_DISC_DROP);
     }
 
     rt_arp_request(pi, ipda);

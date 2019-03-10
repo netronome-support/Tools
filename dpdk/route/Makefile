@@ -48,6 +48,8 @@ SRCS-y += forward.c arp.c icmp.c pktutils.c dhcp.c
 SRCS-y += tables.c dbgmsg.c argparse.c
 SRCS-y += rings.c
 
+INC := $(sort $(wildcard *.h))
+
 CFLAGS += -O3
 CFLAGS += $(WERROR_FLAGS)
 

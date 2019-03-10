@@ -16,7 +16,7 @@ rt_pkt_send (rt_pkt_t pkt, rt_port_info_t *pi)
     rt_port_index_t port = pi->idx;
     if (unlikely(!(pi->flags & RT_PORT_F_EXIST))) {
         dbgmsg(WARN, pkt, "port not active (%u)", pi->idx);
-        rt_pkt_discard(pkt);
+        rt_pkt_discard(pkt, RT_DISC_IGNORE);
         return;
     }
     assert(pkt.rdidx != 0);

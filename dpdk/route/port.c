@@ -121,6 +121,20 @@ create_thread_rx_queue_list (rt_lcore_id_t lcore)
     return qlist;
 }
 
+void
+rt_port_log_queue_list (rt_lcore_id_t lcore, const rt_queue_list_t *ql)
+{
+    char ts[128];
+    int idx, n = 0;
+    n += sprintf(&ts[n], "LCORE %u RX Task List:", lcore);
+    for (idx = 0 ; idx < ql->count ; idx++) {
+        n += sprintf(&ts[n], " p%u:q%u",
+            ql->list[idx].prtidx,
+            ql->list[idx].queidx);
+    }
+    dbgmsg(CONF, nopkt, "%s", ts);
+}
+
 int
 rt_port_check_lcores (void)
 {

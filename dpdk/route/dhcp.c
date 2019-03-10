@@ -191,14 +191,15 @@ rt_dhcp_process (rt_pkt_t pkt)
     rt_dhcp_info_t *info = &pi->dhcpinfo;
     rt_pkt_dhcp_t *dhcp = PTR(pkt.pp.l3, void, 28);
     rt_dhcp_options_t opts;
+    rt_disc_cause_t reason = RT_DISC_ERROR;
 
     if (dhcp->opcode != 2) {
         dbgmsg(WARN, pkt, "DCHP wrong opcode (%u)", dhcp->opcode);
-        goto Error;
+        goto Discard;
     }
     if (info->transaction != ntohl(dhcp->transaction)) {
         dbgmsg(WARN, pkt, "DCHP wrong transaction ID");
-        goto Error;
+        goto Discard;
     }
 
     rt_dhcp_options_parse(dhcp, &opts);
@@ -210,7 +211,8 @@ rt_dhcp_process (rt_pkt_t pkt)
                 dbgmsg(INFO, pkt, "DHCP OFFER received (%s/%u)"
                     " but ignored since it is /32",
                     rt_ipaddr_nr_str(l_ipaddr), opts.plen);
-                goto Error;
+                reason = RT_DISC_IGNORE;
+                goto Discard;
             }
             dbgmsg(INFO, pkt, "DHCP OFFER received (%s/%u)",
                 rt_ipaddr_nr_str(l_ipaddr), opts.plen);
@@ -219,24 +221,26 @@ rt_dhcp_process (rt_pkt_t pkt)
             /* Send DHCP REQUEST */
             rt_dhcp_transmit(pi, info, 3);
             info->state = 3;
+            reason = RT_DISC_TERM;
             break;
         case 5: /* DHCP ACK */
             info->state = 5;
             dbgmsg(CONF, pkt, "DHCP ACK received (%s/%u)",
                 rt_ipaddr_nr_str(l_ipaddr), opts.plen);
             rt_port_set_ipv4_addr(pi->idx, l_ipaddr, opts.plen);
+            reason = RT_DISC_TERM;
             break;
         case 6: /* DHCP NEG-ACK */
             dbgmsg(INFO, pkt, "DHCP NEG-ACK received");
             info->state = 0;
+            reason = RT_DISC_TERM;
             break;
         default:
             dbgmsg(WARN, pkt, "DHCP unsupported message (type=%u)", opts.msgtype);
-            goto Error;
+            reason = RT_DISC_ERROR;
+            goto Discard;
     }
 
-    rt_pkt_terminate(pkt);
-    return;
-  Error:
-    rt_pkt_discard_error(pkt);
+  Discard:
+    rt_pkt_discard(pkt, reason);
 }

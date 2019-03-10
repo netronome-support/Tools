@@ -26,7 +26,7 @@ rt_icmp_request (rt_pkt_t pkt, void *icmp)
     uint16_t icmplen = iplen - 20;
     if (buflen < (iplen + 14)) {
         dbgmsg(WARN, pkt, "ICMP Packet too small");
-        rt_pkt_discard_error(pkt);
+        rt_pkt_discard(pkt, RT_DISC_ERROR);
         return;
     }
 
@@ -58,7 +58,7 @@ rt_icmp_proc_reply (rt_pkt_t pkt, __attribute__((unused)) void *icmp)
         pkt.rdidx,
         rt_ipaddr_str(t0, ipsa),
         rt_ipaddr_str(t1, ipda));
-    rt_pkt_terminate(pkt);
+    rt_pkt_discard(pkt, RT_DISC_TERM);
     return;
 }
 
@@ -112,5 +112,5 @@ void rt_icmp_process (rt_pkt_t pkt)
         return;
     }
     dbgmsg(DEBUG, pkt, "ICMP type (=%d) not processed", type);
-    rt_pkt_terminate(pkt);
+    rt_pkt_discard(pkt, RT_DISC_IGNORE);
 }
