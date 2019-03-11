@@ -22,7 +22,7 @@
 /* Network Byte Order Ethernet Hardware (MAC) Address */
 typedef uint8_t rt_eth_addr_t[6];
 
-typedef uint8_t rt_port_index_t;
+typedef uint16_t rt_port_index_t;
 typedef uint8_t rt_queue_index_t;
 typedef uint8_t rt_lcore_id_t;
 
