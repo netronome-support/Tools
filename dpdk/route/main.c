@@ -107,6 +107,8 @@ rt_main_loop (void)
     tx_ring_set_t *trs = create_thread_ring_set(grs);
     rt_queue_list_t *rx_queue_list = create_thread_rx_queue_list(lcore_id);
 
+    rt_port_log_queue_list(lcore_id, rx_queue_list);
+
     if ((rx_queue_list->count == 0)
             && (trs->count == 0)
             && (lcore_id != rte_get_master_lcore())) {

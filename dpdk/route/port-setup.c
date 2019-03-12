@@ -59,6 +59,10 @@ rt_port_setup (void)
 
         if (pi->rx_q_count > 1) {
             prtcfg.rxmode.mq_mode = ETH_MQ_RX_RSS;
+            prtcfg.rx_adv_conf.rss_conf.rss_hf
+                = ETH_RSS_NONFRAG_IPV4_UDP
+                | ETH_RSS_NONFRAG_IPV4_TCP;
+            prtcfg.txmode.mq_mode = ETH_MQ_TX_NONE;
         }
 
         rc = rte_eth_dev_configure(prtidx,
@@ -142,11 +146,11 @@ int rt_port_desc_count (void)
     /* Initialise each port */
     FOREACH_PORT(prtidx) {
         rt_port_info_t *pi = rt_port_lookup(prtidx);
-        if (pi->flags & RT_PORT_F_EXIST) {
-            count += pi->rx_q_count * pi->rx_desc_cnt
-                   + pi->tx_q_count * pi->tx_desc_cnt;
-        }
+        count += pi->rx_q_count * pi->rx_desc_cnt
+               + pi->tx_q_count * pi->tx_desc_cnt;
     }
+
+    dbgmsg(INFO, nopkt, "Buffers required for ports: %d", count);
 
     return count;
 }

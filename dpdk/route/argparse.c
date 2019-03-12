@@ -617,14 +617,14 @@ rt_parse_args (int argc, char **argv)
             dbgmsg_globals.log_pkt_len = strtol(optarg, NULL, 10);
             break;
 
-       /* long options */
+        /* long options */
         case 0:
             break;
 
         default:
-            usage(prgname);
-            errmsg = "could not parse command line";
-            break;
+            fprintf(stderr, "ERROR: failed parsing option (%d,%c)",
+                opt, opt);
+            return -1;
         }
         if ((rc < 0) || (errmsg != NULL)) {
             if (errmsg != NULL)

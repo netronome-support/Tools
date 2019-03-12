@@ -27,9 +27,13 @@ rx_port_process_task_list (const rt_queue_list_t *ql)
         int pktcnt = rte_eth_rx_burst(prtidx, qp->queidx,
             pktlist, MAX_PKT_BURST);
 
+        update_load_statistics(prtidx, pktcnt);
+
+        if (likely(pktcnt == 0))
+            continue;
+
         /* Update RX statistics */
         port_statistics[prtidx].rx += pktcnt;
-        update_load_statistics(prtidx, pktcnt);
 
         /* Process Packets */
         for (idx = 0 ; idx < pktcnt ; idx++) {
