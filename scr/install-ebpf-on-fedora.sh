@@ -227,7 +227,6 @@ elif [ "$fw_app_name" != "ebpf" ]; then
     fw_upgrade=YES
 else
     echo "DONE($fw_version already installed)"
-    echo "eBPF Offload setup for Agilio SmartNIC is complete"
     exit 0
 fi
 ############################################################
@@ -254,5 +253,5 @@ modprobe nfp
     check_status "modprobe of 'nfp' failed"
 
 ############################################################
-echo "SUCCESS($(basename $0)) - eBPF Offload setup for Agilio SmartNIC is complete"
+echo "SUCCESS($(basename $0))"
 exit 0
