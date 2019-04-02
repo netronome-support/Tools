@@ -169,7 +169,11 @@ if [ ${#vf_idx_list[@]} -gt 0 ]; then
         check_status "no NFP[$NFP_DEV_INDEX] present in the system"
     verbose "Selected NFP device at 0000:$nfpbus:00.0"
     for nfpidx in ${vf_idx_list[@]} ; do
-        if [[ "$nfpidx" =~ $re_integer ]]; then
+        if [ "$nfpidx" == "PF" ]; then
+            printf -v pci_bdf "0000:%s:00.0" "$nfpbus"
+            verbose "Translating NFP PF to $pci_bdf"
+            devlist+=( "$pci_bdf" )
+        elif [[ "$nfpidx" =~ $re_integer ]]; then
             test $nfpidx -lt 60
                 check_status "NFP VF index '$nfpidx' is out or range"
             add_nfp_vf_idx "$nfpidx"
