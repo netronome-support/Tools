@@ -89,6 +89,8 @@ function check_status () {
 }
 
 ########################################
+set -o pipefail
+########################################
 
 test "${version}${pkgfile}${pkgdir}" != ""
     check_status "please specify either version, package file, or package directory"
@@ -97,10 +99,12 @@ test "${version}${pkgfile}${pkgdir}" != ""
 
 function check_installation () {
     if [ -f "$conffile" ]; then
-        . $conffile
-        test -d $RTE_SDK            || install="yes"
-        test -f $DPDK_DEVBIND       || install="yes"
-        test -f $DPDK_IGB_UIO_DRV   || install="yes"
+        OLD_RTE_SDK=$(cat $conffile | sed -rn 's/^RTE_SDK=(\S+)$/\1/p')
+        OLD_DEVBIND=$(cat $conffile | sed -rn 's/^DPDK_DEVBIND=(\S+)$/\1/p')
+        OLD_IGB_UIO_DRV=$(cat $conffile | sed -rn 's/^DPDK_IGB_UID_DRV=(\S+)$/\1/p')
+        test -d $OLD_RTE_SDK            || install="yes"
+        test -f $OLD_DPDK_DEVBIND       || install="yes"
+        test -f $OLD_DPDK_IGB_UIO_DRV   || install="yes"
     else
         install="yes"
     fi
@@ -127,10 +131,11 @@ prereqs+=( "lspci@pciutils" ) # needed by dpdk-devbind
 prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel-$kvers" )
 #prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel" )
 
-#case "$version" in
-#    "17.11"|"17.11.2")
+# For Mellanox Driver:
+prereqs+=( "/usr/include/infiniband/verbs.h@ubuntu:libibverbs-dev" )
+prereqs+=( "/usr/include/libmnl/libmnl.h@ubuntu:libmnl-dev" )
+
 prereqs+=( "/usr/include/numa.h@ubuntu:libnuma-dev,centos:numactl-devel" )
-#esac
 
 if [ "$OS_ID" == "fedora" ]; then
     prereqs+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
@@ -245,7 +250,7 @@ if [ "$pkgdir" == "" ]; then
 
     tardir=$(tar t -f $pkgfile \
         | head -1 \
-        | sed -r 's/\/$//')
+        | sed -r 's/\/$//' ; true)
 
         check_status "failed to determine package directory"
 
@@ -286,6 +291,10 @@ make -C $RTE_SDK config $opts
 
     check_status "failed to configure DPDK"
 
+########################################
+# Remove Duplicates
+DPDK_CFG_LIBRTE_LIST=$(printf "%s\n" $DPDK_CFG_LIBRTE_LIST \
+    | sort -u )
 ########################################
 ss=""
 ########################################

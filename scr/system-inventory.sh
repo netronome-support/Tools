@@ -259,6 +259,7 @@ run "lsmod" ""                  "lsmod.txt"
 run "ps" "aux"                  "ps-aux.txt"
 run "dmidecode" ""              "dmidecode.txt"
 run "lshw" ""                   "lshw.txt"
+run "fdisk" "--list"            "fdisk-list.txt"
 run "printenv" ""               "printenv.txt"
 
 run "virsh" "--version"         "virsh-version.txt"

@@ -1,10 +1,25 @@
 #!/bin/bash
 
 ############################################################
-dldir="/var/cache/download"
+##  Allow for local variable overrides
+if [ -d $HOME/.config/netronome ]; then
+    for fname in $(find $HOME/.config/netronome -name '*.sh') ; do
+        . $fname
+    done
+fi
+############################################################
+##  Default Settings
+if [ "$(whoami)" == "root" ]; then
+    : ${DOWNLOAD_CACHE_DIR:="/var/cache/download"}
+    : ${PKG_INSTALL_BASE_DIR:=/opt/pkg}
+    : ${GIT_REPO_BASE_DIR:="/opt/git"}
+else
+    : ${DOWNLOAD_CACHE_DIR:="$HOME/.cache/download"}
+    : ${PKG_INSTALL_BASE_DIR:="$HOME/opt/pkg"}
+    : ${GIT_REPO_BASE_DIR:="$HOME/git"}
+fi
 ############################################################
 ns_atchmnt_url="https://help.netronome.com/helpdesk/attachments"
-deb_dl_dir="/var/cache/download/deb"
 git_repo_base_dir="/opt/git"
 ############################################################
 function check_status () {
@@ -50,17 +65,17 @@ function download () {
     local dldir="$1"
     local url="$2"
     local fname="$3"
+    local penddir="$dcdir/.pending"
     if [ -f "$dldir/$fname" ]; then
         return 0
     fi
-    mkdir -p $dldir/pending
-        check_status "failed to make directory $dldir"
+    mkdir -p $penddir
+        check_status "failed to make directory $penddir"
     echo " - Download $url"
-    wget --continue "$url" -O "$dldir/pending/$fname"
+    wget --continue "$url" -O "$penddir/$fname"
         check_status "failed to download $url ($fname)"
-    mv $dldir/pending/$fname $dldir/$fname
+    mv $penddir/$fname $dldir/$fname
         check_status "failed to move downloaded file"
-    return 0
 }
 ############################################################
 echo " - Check Ubuntu OS Version"
@@ -82,14 +97,14 @@ fi
 
 ############################################################
 
-pkglist=()
-pkglist+=( make gcc libelf-dev bc build-essential binutils-dev )
-pkglist+=( ncurses-dev libssl-dev util-linux pkg-config elfutils )
-pkglist+=( libreadline-dev libmnl-dev bison flex git wget )
-pkglist+=( "initramfs-tools" ) # Missed in the documentation
-pkglist+=( ethtool )
+pkgs=()
+pkgs+=( make gcc libelf-dev bc build-essential binutils-dev )
+pkgs+=( ncurses-dev libssl-dev util-linux pkg-config elfutils )
+pkgs+=( libreadline-dev libmnl-dev bison flex git wget )
+pkgs+=( "initramfs-tools" ) # Missed in the documentation
+pkgs+=( ethtool )
 
-apt-get install -y ${pkglist[@]}
+apt-get install -y ${pkgs[@]}
     check_status "failed to install packages"
 
 ############################################################
@@ -212,6 +227,7 @@ attachid="36025601060" ; r_pkgvers="4.20"
 
 check_version 2 "#.#" "$c_pkgvers" "$r_pkgvers"
 if [ $? -ne 0 ]; then
+    deb_dl_dir="$DOWNLOAD_CACHE_DIR/deb"
     pkgfname="bpftool-${r_pkgvers}_amd64.deb"
     download $deb_dl_dir "$ns_atchmnt_url/$attachid" "$pkgfname"
 
@@ -229,6 +245,7 @@ check_version 4 "#.#.#.#" "$c_pkgvers" "$r_pkgvers"
 if [ $? -ne 0 ]; then
     echo " - Install Netronome eBPF Firmware"
     pkgfname="agilio-bpf-firmware-$r_pkgvers.deb"
+    deb_dl_dir="$DOWNLOAD_CACHE_DIR/deb"
     download $deb_dl_dir "$ns_atchmnt_url/$attchid" "$pkgfname"
 
     dpkg -i $deb_dl_dir/$pkgfname
