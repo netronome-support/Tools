@@ -37,9 +37,6 @@ test "$vmname" != ""
 which virsh > /dev/null 2>&1
     check_status "'virsh' is not installed"
 
-which nc > /dev/null 2>&1
-    check_status "'nc' is not installed"
-
 ########################################################################
 ##  Check that VM exists and is running
 
@@ -128,12 +125,6 @@ fi
 
 test "$ipaddr" != ""
     check_status "no active lease for $vm_iface_mac_addr on $vmname"
-
-########################################################################
-##  Verify that VM is responding to SSH
-
-nc -w 1 $ipaddr $VIRSH_MGMT_SSH_PORT < /dev/null > /dev/null 2>&1
-    check_status "VM '$vmname' is not responding on port $VIRSH_MGMT_SSH_PORT (SSH)"
 
 ########################################################################
 

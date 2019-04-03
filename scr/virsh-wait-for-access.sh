@@ -18,6 +18,7 @@ which virsh-get-vm-ipaddr.sh > /dev/null 2>&1
     check_status "'virsh-get-vm-ipaddr.sh' is not installed"
 ########################################################################
 param=""
+checkPortList=()
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case $arg in
@@ -26,7 +27,11 @@ for arg in "$@" ; do
             exit 0
             ;;
         "--state") param="state" ;;
+        "--check-port") param="check-port" ;;
+        "--check-ssh") optCheckSSH=yes ;;
         "--quiet"|"-q") optQuiet=yes ;;
+        "--ping-only") optPingOnly=yes ;;
+        "--skip-ping") optSkipPing=yes ;;
         *)
             vmlist+=( "$arg" )
             ;;
@@ -34,6 +39,7 @@ for arg in "$@" ; do
     else
         case "$param" in
         "state") VIRSH_WAIT_FOR_STATE="$arg" ;;
+        "check-port") checkPortList+=( "$arg" ) ;;
         esac
         param=""
     fi
@@ -55,6 +61,9 @@ sshopts+=( "-o" "ConnectionAttempts=30" )
 sshopts+=( "-o" "ServerAliveInterval=300" )
 if [ "$VIRSH_ACCESS_SSH_USERNAME" != "" ]; then
     sshopts+=( "-l" "$VIRSH_ACCESS_SSH_USERNAME" )
+fi
+if [ "$VIRSH_ACCESS_SSH_PORT" != "" ]; then
+    sshopts+=( "-p" "$VIRSH_ACCESS_SSH_PORT" )
 fi
 if [ "$VIRSH_ACCESS_SSH_PRIVATE_KEY_FILE" != "" ]; then
     sshopts+=( "-i" "$VIRSH_ACCESS_SSH_PRIVATE_KEY_FILE" )
@@ -82,14 +91,25 @@ for vmname in ${vmlist[@]} ; do
         if [ $? -ne 0 ]; then
             continue
         fi
-        ping -q -c 1 -W 1 "$ipaddr" > /dev/null
-        if [ $? -ne 0 ]; then
-            continue
+        if [ "$optSkipPing" == "" ]; then
+            ping -q -c 1 -W 1 "$ipaddr" > /dev/null
+            if [ $? -ne 0 ]; then
+                continue
+            fi
         fi
-        ssh ${sshopts[@]} $ipaddr true
-        if [ $? -eq 0 ]; then
-            break
+        for port in ${checkPortList[@]} ; do
+            nc -w 1 $ipaddr $port > /dev/null 2>&1
+            if [ $? -ne 0 ]; then
+                continue
+            fi
+        done
+        if [ "$optCheckSSH" != "" ]; then
+            ssh ${sshopts[@]} $ipaddr true
+            if [ $? -ne 0 ]; then
+                continue
+            fi
         fi
+        break
     done
 done
 
