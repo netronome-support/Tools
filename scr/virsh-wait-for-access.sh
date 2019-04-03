@@ -70,7 +70,7 @@ if [ "$VIRSH_ACCESS_SSH_PRIVATE_KEY_FILE" != "" ]; then
 fi
 ########################################################################
 if [ "$optQuiet" == "" ]; then
-    echo -n "Wait for VM access "
+    echo -n "Wait for VM access ..."
 fi
 
 idx=0
@@ -114,7 +114,7 @@ for vmname in ${vmlist[@]} ; do
 done
 
 if [ "$optQuiet" == "" ]; then
-    echo " SUCCESS"
+    echo " UP"
 fi
 
 ########################################################################

@@ -46,7 +46,7 @@ for vmname in ${vmlist[@]} ; do
 done
 ########################################################################
 if [ "$optQuiet" == "" ]; then
-    echo -n "Wait for VM(s) "
+    echo -n "Wait for state '$VIRSH_WAIT_FOR_STATE' ..."
 fi
 
 idx=0
