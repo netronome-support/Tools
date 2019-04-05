@@ -25,6 +25,8 @@ for arg in "$@" ; do
             ;;
         "--state") param="state" ;;
         "--quiet"|"-q") optQuiet=yes ;;
+        "--no-timeout") VIRSH_WAIT_FOR_TIMEOUT="" ;;
+        "--timeout") param="timeout" ;;
         *)
             vmlist+=( "$arg" )
             ;;
@@ -32,6 +34,7 @@ for arg in "$@" ; do
     else
         case "$param" in
         "state") VIRSH_WAIT_FOR_STATE="$arg" ;;
+        "timeout") VIRSH_WAIT_FOR_TIMEOUT="$arg" ;;
         esac
         param=""
     fi
@@ -49,7 +52,7 @@ if [ "$optQuiet" == "" ]; then
     echo -n "Wait for state '$VIRSH_WAIT_FOR_STATE' ..."
 fi
 
-idx=0
+tm_start=$(date +'%s')
 for vmname in ${vmlist[@]} ; do
     while : ; do
         state=$(virsh dominfo $vmname \
@@ -61,10 +64,18 @@ for vmname in ${vmlist[@]} ; do
             echo -n '.'
         fi
         sleep 1
-        idx=$(( idx + 1 ))
-        if [ $idx -gt $VIRSH_WAIT_FOR_TIMEOUT ]; then
-            echo " ERROR"
-            exit -1
+        if [ "$VIRSH_WAIT_FOR_TIMEOUT" != "" ]; then
+            tm_now=$(date +'%s')
+            tm_limit=$(( tm_start + $VIRSH_WAIT_FOR_TIMEOUT ))
+            if [ $tm_now -gt $tm_limit ]; then
+                if [ "$optQuiet" == "" ]; then
+                    echo " ERROR"
+                else
+                    false ; check_status \
+                        "VM '$vmname' did not reach state '$VIRSH_WAIT_FOR_STATE'"
+                fi
+                exit -1
+            fi
         fi
     done
 done

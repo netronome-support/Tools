@@ -32,6 +32,8 @@ for arg in "$@" ; do
         "--quiet"|"-q") optQuiet=yes ;;
         "--ping-only") optPingOnly=yes ;;
         "--skip-ping") optSkipPing=yes ;;
+        "--no-timeout") VIRSH_WAIT_FOR_TIMEOUT="" ;;
+        "--timeout") param="timeout" ;;
         *)
             vmlist+=( "$arg" )
             ;;
@@ -40,6 +42,7 @@ for arg in "$@" ; do
         case "$param" in
         "state") VIRSH_WAIT_FOR_STATE="$arg" ;;
         "check-port") checkPortList+=( "$arg" ) ;;
+        "timeout") VIRSH_WAIT_FOR_TIMEOUT="$arg" ;;
         esac
         param=""
     fi
@@ -74,6 +77,7 @@ if [ "$optQuiet" == "" ]; then
 fi
 
 idx=0
+tm_start=$(date +'%s')
 for vmname in ${vmlist[@]} ; do
     while : ; do
         if [ $idx -gt 0 ]; then
@@ -83,9 +87,18 @@ for vmname in ${vmlist[@]} ; do
             fi
         fi
         idx=$(( idx + 1 ))
-        if [ $idx -gt $VIRSH_WAIT_FOR_TIMEOUT ]; then
-            echo " ERROR"
-            exit -1
+        if [ "$VIRSH_WAIT_FOR_TIMEOUT" != "" ]; then
+            tm_now=$(date +'%s')
+            tm_limit=$(( tm_start + $VIRSH_WAIT_FOR_TIMEOUT ))
+            if [ $tm_now -gt $tm_limit ]; then
+                if [ "$optQuiet" == "" ]; then
+                    echo " ERROR"
+                else
+                    false ; check_status \
+                        "failed to access VM '$vmname' "
+                fi
+                exit -1
+            fi
         fi
         ipaddr=$(virsh-get-vm-ipaddr.sh $vmname)
         if [ $? -ne 0 ]; then
