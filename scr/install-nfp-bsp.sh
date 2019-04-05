@@ -7,4 +7,3 @@ install-packages.sh nfp-bsp-6000-b0 \
     || exit -1
 
 exit 0
-

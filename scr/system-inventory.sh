@@ -163,9 +163,6 @@ function run () {
 }
 
 ########################################################
-export NFP_SPI_LOCK_OVERRIDE=1
-export NFP_CPP_TRANSPORT=pcieuser
-########################################################
 if [ -d /opt/netronome/bin ]; then
     export PATH="$PATH:/opt/netronome/bin"
 fi
