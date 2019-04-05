@@ -133,7 +133,7 @@ test "$ipaddr" != ""
     check_status "no active lease for $vm_iface_mac_addr on $vmname"
 
 ########################################################################
-rm -f $tmpdir
+rm -rf $tmpdir
 ########################################################################
 
 echo $ipaddr
