@@ -71,8 +71,9 @@ done
 
 if [ "$optQuiet" == "" ]; then
     case "$VIRSH_WAIT_FOR_STATE" in
-      'running') msg="UP" ;;
-      'shut off') msg="DOWN" ;;
+      'running')    msg="UP" ;;
+      'shut off')   msg="DOWN" ;;
+      'paused')     msg="PAUSED" ;;
       *) msg="" ;;
     esac
     echo " $msg"

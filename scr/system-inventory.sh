@@ -33,6 +33,7 @@ list+=( "/etc/*-release" )
 list+=( "/etc/network" )
 list+=( "/etc/sysconfig/network-scripts/ifcfg*" )
 list+=( "/etc/networks" )
+list+=( "/etc/netplan" )
 list+=( "/etc/NetworkManager/conf.d" )
 list+=( "/etc/hosts" )
 list+=( "/etc/fstab" )
@@ -162,6 +163,13 @@ function run () {
 }
 
 ########################################################
+export NFP_SPI_LOCK_OVERRIDE=1
+export NFP_CPP_TRANSPORT=pcieuser
+########################################################
+if [ -d /opt/netronome/bin ]; then
+    export PATH="$PATH:/opt/netronome/bin"
+fi
+########################################################
 # Create list of available NFPs
 
 nfp_pf_bdf_list=( $(lspci -d 19ee: \
@@ -223,18 +231,13 @@ iflist=$(cat /proc/net/dev \
 #   http://github.com/netronome-support/Tools
 
 run "rate" "--once --long --interval 1 --pktsize $iflist" "rate.txt"
-
 run "list-iface-info.sh" "" "iface-info.txt"
+run "inventory.sh" "" "inventory.txt"
+run "virsh-list-vm-interfaces.sh" "" "virsh/vm-interfaces.txt"
 
 ########################################################
 
 sample "s1"
-
-########################################################
-
-if [ -d /opt/netronome/bin ]; then
-    export PATH="$PATH:/opt/netronome/bin"
-fi
 
 ########################################################
 
@@ -291,7 +294,7 @@ done
 run "dpdk-devbind.py" "--status" "dpdk-devbind-status.txt"
 run "virtio-forwarder" "--version" "virtio-forwarder-version.txt"
 run "/usr/lib/virtio-forwarder/virtioforwarder_core_pinner.py" "" \
-                                 "virtioforwarder_core_pinner.txt"
+                                "virtioforwarder_core_pinner.txt"
 
 ########################################################
 
