@@ -100,6 +100,21 @@ sed -r 's/^(APP).*$/\1 = l3bounce/' \
     -i $srcdir/Makefile \
     || exit -1
 
+if [ "$DPDK_SET_MAX_ETH_PKT_SIZE" != "" ]; then
+    # Re-configure the Interface MTU
+    insert="rte_eth_dev_set_mtu(portid, $DPDK_SET_MAX_ETH_PKT_SIZE);"
+    sed -r "s/(ret = rte_eth_dev_start)/$insert \1/" \
+        -i $srcdir/main.c
+        check_status "failed to patch source code"
+
+    # Set the MTUs to hold enough data
+    insert="(($DPDK_SET_MAX_ETH_PKT_SIZE) + RTE_PKTMBUF_HEADROOM)"
+    sed -r "s/RTE_MBUF_DEFAULT_BUF_SIZE/$insert/g" \
+        -i $srcdir/main.c
+        check_status "failed to patch source code"
+
+fi
+
 export RTE_OUTPUT="$HOME/.cache/dpdk/$projname"
 mkdir -p $RTE_OUTPUT
 
