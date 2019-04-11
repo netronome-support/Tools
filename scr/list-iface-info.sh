@@ -22,8 +22,47 @@ re_pciaddr='^'"$f_pciaddr"'$'
 ########################################################################
 declare -A if_db_ifname
 declare -A if_db_driver
-declare -A if_db_desc
+declare -A if_db_type
+declare -A if_db_addr
 if_db_list=()
+########################################################################
+function usage () {
+cat <<EOF
+$(basename $0) - list netdev interfaces with selected meta data
+Syntax: $(basename $0) [<options>]
+Options:
+  -h|--help             - Print this help information
+  -d|--driver <name>    - Only list netdevs with specified driver
+  -b|--brief            - Only list netdev names
+EOF
+}
+########################################################################
+param=""
+opt_driver=""
+opt_format=""
+
+for arg in $@ ; do
+    if [ "$param" == "" ]; then
+        case $arg in
+        "-h"|"--help")
+            usage
+            exit 0
+            ;;
+        "-d"|"--driver") param="driver" ;;
+        "-b"|"--brief") opt_format="brief" ;;
+        *)
+            echo "ERROR($(basename $0)): syntax error at '$arg'"
+            exit -1
+            ;;
+        esac
+    else
+        case "$param" in
+        "driver") opt_driver="$arg" ;;
+        esac
+        param=""
+    fi
+done
+
 ########################################################################
 ##  List interfaces with their driver and bus-info
 
@@ -38,7 +77,10 @@ for ifname in $list ; do
     businfo=$(echo $info \
         | sed -rn 's/^.*@bus-info: ([^@]*)@.*$/\1/p')
     s_ifname=""
-    desc=""
+    type="" ; addr=""
+    if [ "$opt_driver" != "" ] && [ "$opt_driver" != "$driver" ]; then
+        continue
+    fi
     if [[ "$businfo" =~ $re_nfp_vf ]]; then
         idx=$(echo $businfo \
             | sed -rn 's/^.*\sVF.\.([0-9]+)\s.*$/\1/p')
@@ -46,13 +88,14 @@ for ifname in $list ; do
             | sed -rn 's/^.*\s(\S+)$/\1/p')
 
         printf -v s_ifname "d-vf-%02u" $idx
-        printf -v desc "VF %2u REPR (%s)" $idx "$pciaddr"
+        type="VF-R"
+        printf -v addr "%2u (%s)" "$idx" "$pciaddr"
     elif [[ "$businfo" =~ $re_pciaddr ]]; then
         printf -v s_ifname "e-pci-%s" $businfo
-        printf -v desc "PCI %s" "$businfo"
+        type="PCI"
+        addr="$businfo"
     else
         s_ifname="a-other"
-        desc=""
         ppfile="/sys/class/net/$ifname/phys_port_name"
         if [ -f $ppfile ]; then
             phys_port=$(cat $ppfile 2> /dev/null)
@@ -62,21 +105,25 @@ for ifname in $list ; do
             if [[ "$phys_port" =~ $re_p ]]; then
                 idx=${phys_port#p}
                 printf -v s_ifname "b-p-%02u" $idx
-                printf -v desc "P  %2u" $idx
+                type="P"
+                addr="$idx"
             elif [[ "$phys_port" =~ $re_pf ]]; then
                 idx=${phys_port#pf}
                 printf -v s_ifname "c-pf-%02u" $idx
-                printf -v desc "PF %2u" $idx
+                type="PF"
+                addr="$idx"
             elif [[ "$phys_port" =~ $re_vf ]]; then
                 idx=${phys_port#*vf}
                 printf -v s_ifname "d-vf-%02u" $idx
-                printf -v desc "VF %2u REPR" $idx
+                type="VF-R"
+                addr="$idx"
             elif [ "$phys_port" == "" ]; then
                 re_nfp_p_ifname='^nfp_p[0-9]$'
                 if [[ "$ifname" =~ $re_nfp_p_ifname ]]; then
                     idx=${ifname#nfp_p}
                     printf -v s_ifname "b-p-%02u" $idx
-                    printf -v desc "P  %2u" $idx
+                    type="P"
+                    addr="$idx"
                 fi
             fi
         fi
@@ -84,7 +131,8 @@ for ifname in $list ; do
     s_ifname="$s_ifname-$ifname"
     if_db_ifname[$s_ifname]="$ifname"
     if_db_driver[$s_ifname]="$driver"
-    if_db_desc[$s_ifname]="$desc"
+    if_db_type[$s_ifname]="$type"
+    if_db_addr[$s_ifname]="$addr"
     if_db_list+=( "$s_ifname" )
 done
 
@@ -98,11 +146,17 @@ s_if_list=$(echo ${if_db_list[@]} \
 ########################################################################
 
 for s_ifname in $s_if_list ; do
-    printf "  %-16s %-14s %s\n" \
-        "${if_db_ifname[$s_ifname]}" \
-        "${if_db_driver[$s_ifname]}" \
-        "${if_db_desc[$s_ifname]}" \
-
+    case "$opt_format" in
+      "brief")
+        printf "%s\n" "${if_db_ifname[$s_ifname]}"
+        ;;
+      *)
+        printf "  %-16s %-14s %-5s %s\n" \
+            "${if_db_ifname[$s_ifname]}" \
+            "${if_db_driver[$s_ifname]}" \
+            "${if_db_type[$s_ifname]}" \
+            "${if_db_addr[$s_ifname]}"
+    esac
 done
 
 ########################################################################
