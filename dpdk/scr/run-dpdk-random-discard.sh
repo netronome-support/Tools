@@ -54,13 +54,13 @@ if [ "$discrate" == "" ] || [ "${discrate##*[!0-9.]*}" == "" ]; then
 fi
 
 ########################################################################
-set -o pipefail
-rand_discard_level=$(echo "scale=12 ; $discrate * 0.01 * 2^31" \
-    | bc \
-    | sed -r 's/\..*$//')
-    check_status "failed to parse '$discrate'"
-printf -v portmask "%x" \
-    $(( ( 1 << $prt0idx ) | ( 1 << $prt1idx ) ))
+which install-packages.sh > /dev/null 2>&1
+    check_status 'install-packages.sh is not installed'
+pkgs=()
+pkgs+=( 'bc@' 'sed@' )
+pkgs+=( 'make@' 'gcc@' )
+install-packages.sh ${pkgs[@]}
+    check_status ""
 ########################################################################
 
 if [ "$DPDK_CONF_FILE" != "NONE" ]; then
@@ -72,6 +72,34 @@ fi
 test -d $RTE_SDK/examples/l2fwd
     check_status "missing $RTE_SDK/examples/l2fwd"
 
+########################################################################
+set -o pipefail
+rand_discard_level=$(echo "scale=12 ; $discrate * 0.01 * 2^31" \
+    | bc \
+    | sed -r 's/\..*$//')
+    check_status "failed to parse '$discrate'"
+printf -v portmask "%x" \
+    $(( ( 1 << $prt0idx ) | ( 1 << $prt1idx ) ))
+########################################################################
+##  Try to figure out a vCPU bitmap
+
+if [ "$DPDK_APP_CORE_MASK" == "" ]; then
+    # Create a list of 3 vCPUs (skipping the first) that are on
+    # different cores on the specified (or first) socket:
+    opts=()
+    opts+=( "--skip" "1" )
+    opts+=( "--count" "3" )
+    if [ "$DPDK_APP_SOCKET" != "" ]; then
+        opts+=( "--socket" "$DPDK_APP_SOCKET" )
+    fi
+    list=( $(list-socket-vcpus.sh ${opts[@]}) )
+    # Convert the list to a bitmap:
+    bitmap=0
+    for vcpuidx in ${list[@]} ; do
+        bitmap=$(( bitmap + ( 1 << vcpuidx ) ))
+    done
+    printf -v DPDK_APP_CORE_MASK "0x%x" "$bitmap"
+fi
 ########################################################################
 srcdir="$DPDK_BUILD_DIR/$projname"
 mkdir -p $srcdir
@@ -133,7 +161,7 @@ sed -r "/^static uint64_t timer_period/a $incl" \
     -i $srcdir/main.c
     check_status "failed to patch source code"
 
-sed -r 's/^(APP).*$/\1 = random-discard/' \
+sed -r "s/^(APP).*\$/\1 = $projname/" \
     -i $srcdir/Makefile
     check_status "failed to patch source code"
 
