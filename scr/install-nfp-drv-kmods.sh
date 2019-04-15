@@ -90,7 +90,7 @@ mokutil --disable-validation
 
 ########################################################################
 
-make -C $drvdir \
+make -C $drvdir --jobs $(nproc) \
     | tee $logdir/make-nfp-drv-kmods.log
     check_status "failed to compile NFP Driver kmods"
 
@@ -107,38 +107,37 @@ $SUDO make -C $drvdir install 2>&1 \
     check_status "failed to install NFP Driver kmods"
 
 ########################################################################
-
 ko_file="$drvdir/src/nfp.ko"
-
 test -f $ko_file
     check_status "NFP driver missing at $ko_file"
 
 ########################################################################
-
 tmpdir=$(mktemp --directory)
+mkdir -p $tmpdir/etc/modprobe.d
+mkdir -p $tmpdir/etc/NetworkManager/conf.d
+########################################################################
 
-nm_cfg_dir="/etc/NetworkManager/conf.d"
-
-$SUDO mkdir -p $nm_cfg_dir
-    check_status "failed to create $nm_cfg_dir"
-
-$SUDO cat <<EOF > $tmpdir/nfp.conf
-# Added by $0 on $(date)
+cat <<EOF > $tmpdir/etc/NetworkManager/conf.d/nfp.conf
+# Added by $(basename $0) on $(date)
 [keyfile]
 unmanaged-devices=driver:nfp,driver:nfp_netvf
 EOF
 
-$SUDO cat <<EOF > $tmpdir/nfp-drv-location.conf
-install nfp insmod $drvdir/src/nfp.ko
+cat <<EOF > $tmpdir/etc/modprobe.d/nfp-cpp.conf
+# Added by $(basename $0) on $(date)
+options nfp nfp_dev_cpp=1
 EOF
 
-$SUDO cp -f $tmpdir/nfp.conf $nm_cfg_dir
-$SUDO cp -f $tmpdir/nfp-drv-location.conf /etc/modprobe.d
+########################################################################
+
+$SUDO cp -rfu $tmpdir/etc /
+    check_status "failed to copy new configuration files"
 
 $SUDO depmod --all
+    check_status "failed to 'depmod --all'"
 
+########################################################################
 rm -rf $tmpdir
-
 ########################################################################
 echo "SUCCESS($(basename $0))"
 exit 0

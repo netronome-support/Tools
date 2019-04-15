@@ -40,6 +40,16 @@ else
 fi
 
 ########################################
+
+function check_status () {
+    rc="$?" ; errmsg="$1"
+    if [ "$rc" != "0" ]; then
+        echo "ERROR($(basename $0)): $errmsg"
+        exit -1
+    fi
+}
+
+########################################
 ##  Parse command line
 
 pkgname="dpdk"
@@ -53,12 +63,16 @@ for arg in "$@" ; do
                 exit 0
                 ;;
             "--verbose"|"-v")   optVerbose="yes" ;;
+            "--build-only")     optSkipInstall="yes" ;;
+            "--skip-install")   optSkipInstall="yes" ;;
             "--reinstall")      install="yes" ;;
             "--force")          install="yes" ;;
             "--version")        param="version" ;;
             "--list-set")       param="list-set" ;;
             "--list-add")       param="list-add" ;;
         *)
+            test "${arg:0:1}" != "-"
+                check_status "failed to parse '$arg'"
             if [ -f "$arg" ]; then
                 pkgfile="$arg"
             elif [ -d "$arg" ]; then
@@ -78,15 +92,8 @@ for arg in "$@" ; do
     fi
 done
 
-########################################
-
-function check_status () {
-    rc="$?" ; errmsg="$1"
-    if [ "$rc" != "0" ]; then
-        echo "ERROR($(basename $0)): $errmsg"
-        exit -1
-    fi
-}
+test "$param" == ""
+    check_status "argument missing for '--$param'"
 
 ########################################
 set -o pipefail
@@ -125,6 +132,7 @@ prereqs+=( "tar@" )
 prereqs+=( "sed@" )
 prereqs+=( "gcc@" )
 prereqs+=( "make@" )
+prereqs+=( "pkg-config@" )
 prereqs+=( "python@" ) # needed by dpdk-devbind
 prereqs+=( "lspci@pciutils" ) # needed by dpdk-devbind
 # CentOS:
@@ -261,8 +269,9 @@ export RTE_SDK="$pkgdir"
 
 ########################################
 
-opts=""
-opts="$opts T=$RTE_TARGET"
+opts=()
+opts+=( "-C" "$RTE_SDK" )
+opts+=( "T=$RTE_TARGET" )
 
 ########################################
 ##  Disable KNI (DPDK v16.11.3 does not build on CentOS 7.4)
@@ -287,7 +296,10 @@ sed -r 's/^(CONFIG_RTE_MAX_ETHPORTS)=.*$/\1=64/' \
 
 ########################################
 
-make -C $RTE_SDK config $opts
+mkdir -p $RTE_SDK/build
+
+make ${opts[@]} config 2>&1 \
+    | tee $RTE_SDK/build/config.log
 
     check_status "failed to configure DPDK"
 
@@ -343,7 +355,7 @@ fi
 
 ########################################
 
-make -C $RTE_SDK \
+make -C $RTE_SDK --jobs $(nproc) 2>&1 \
     | tee $RTE_SDK/build/make.log
 
     check_status "failed to make DPDK"
@@ -373,19 +385,18 @@ EOF
 
 ########################################
 
-$SUDO make -C $RTE_SDK install
-
-    check_status "failed to install DPDK"
+if [ "$optSkipInstall" == "" ]; then
+    $SUDO make -C $RTE_SDK install 2>&1 \
+        | tee $RTE_SDK/build/install.log
+        check_status "failed to install DPDK"
+    $SUDO depmod -a
+fi
 
 ########################################
 ##  Move the pending build config
 
 /bin/mv ${buildconfig}.pending $buildconfig \
     || exit -1
-
-########################################
-
-$SUDO depmod -a
 
 ########################################
 
@@ -408,7 +419,7 @@ test "$igb_uio_drv_file" != ""
 devbind=$(find $RTE_SDK -name 'dpdk-devbind.py' \
     | head -1)
 
-if [ -f "$devbind" ]; then
+if [ -f "$devbind" ] && [ "$optSkipBuild" == "" ]; then
     $SUDO cp -f $devbind /usr/local/bin
 
         check_status "failed to copy dpdk-devbind.py"

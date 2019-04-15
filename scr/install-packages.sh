@@ -47,15 +47,23 @@ EOT
 # Default Debian Package Cache to Max Age of 10 hours
 : "${PKG_UPDATE_MAX_AGE:=600}"
 ########################################################################
-if which apt-get > /dev/null 2>&1 ; then
+if which apt > /dev/null 2>&1 ; then
+    OS_PKG_ARCH="deb"
+    OS_PKG_TOOL=""
+    OS_PKG_TOOL="apt"
+    OS_ID_LIKE="debian ubuntu"
+    OS_PKG_NAME_DEVEL_ENDING='dev'
+elif which apt-get > /dev/null 2>&1 ; then
     OS_PKG_ARCH="deb"
     OS_PKG_TOOL=""
     OS_PKG_TOOL="apt-get"
     OS_ID_LIKE="debian ubuntu"
+    OS_PKG_NAME_DEVEL_ENDING='dev'
 elif which yum > /dev/null 2>&1 ; then
     OS_PKG_ARCH="rpm"
     OS_PKG_TOOL="yum"
     OS_ID_LIKE="redhat fedora centos"
+    OS_PKG_NAME_DEVEL_ENDING='devel'
 else
     echo "ERROR: unable to determine package installation tool"
     exit -1
@@ -134,7 +142,12 @@ function identify_package () {
                 fi
             done
         else
-            pkg_default="$field"
+            local re_devel='^.*-DEVEL$'
+            if [[ "$field" =~ $re_devel ]]; then
+                pkg_default="${field/%-DEVEL/-$OS_PKG_NAME_DEVEL_ENDING}"
+            else
+                pkg_default="$field"
+            fi
         fi
         idx=$(( idx + 1 ))
     done
