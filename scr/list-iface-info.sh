@@ -33,6 +33,8 @@ Syntax: $(basename $0) [<options>]
 Options:
   -h|--help             - Print this help information
   -d|--driver <name>    - Only list netdevs with specified driver
+  -t|--type <type>      - Only list netdevs with specified type
+  -a|--addr <address>   - Only list netdevs with specified address
   -b|--brief            - Only list netdev names
 EOF
 }
@@ -49,6 +51,8 @@ for arg in $@ ; do
             exit 0
             ;;
         "-d"|"--driver") param="driver" ;;
+        "-t"|"--type") param="type" ;;
+        "-a"|"--addr") param="addr" ;;
         "-b"|"--brief") opt_format="brief" ;;
         *)
             echo "ERROR($(basename $0)): syntax error at '$arg'"
@@ -57,7 +61,9 @@ for arg in $@ ; do
         esac
     else
         case "$param" in
-        "driver") opt_driver="$arg" ;;
+        "driver")   opt_driver="$arg" ;;
+        "type")     opt_type="$arg" ;;
+        "addr")     opt_addr="$arg" ;;
         esac
         param=""
     fi
@@ -127,6 +133,12 @@ for ifname in $list ; do
                 fi
             fi
         fi
+    fi
+    if [ "$opt_type" != "" ] && [ "$opt_type" != "$type" ]; then
+        continue
+    fi
+    if [ "$opt_addr" != "" ] && [ "$opt_addr" != "$addr" ]; then
+        continue
     fi
     s_ifname="$s_ifname-$ifname"
     if_db_ifname[$s_ifname]="$ifname"

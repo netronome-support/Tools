@@ -16,7 +16,7 @@ projname="random-discard"
 ########################################################################
 : ${DPDK_CONF_FILE:=/etc/dpdk.conf}
 : ${DPDK_BUILD_DIR:=$HOME/.local/build/dpdk}
-: ${DPDK_APP_CORE_MASK:=7}
+: ${DPDK_APP_PRINT_INTERVAL:=1}
 ########################################################################
 function check_status () {
     rc="$?" ; errmsg="$1"
@@ -83,12 +83,15 @@ printf -v portmask "%x" \
 ########################################################################
 ##  Try to figure out a vCPU bitmap
 
+: ${DPDK_APP_SKIP_VCPU_COUNT:=1}
+: ${DPDK_APP_USE_VCPU_COUNT:=3}
+
 if [ "$DPDK_APP_CORE_MASK" == "" ]; then
     # Create a list of 3 vCPUs (skipping the first) that are on
     # different cores on the specified (or first) socket:
     opts=()
-    opts+=( "--skip" "1" )
-    opts+=( "--count" "3" )
+    opts+=( "--skip" "$DPDK_APP_SKIP_VCPU_COUNT" )
+    opts+=( "--count" "$DPDK_APP_USE_VCPU_COUNT" )
     if [ "$DPDK_APP_SOCKET" != "" ]; then
         opts+=( "--socket" "$DPDK_APP_SOCKET" )
     fi
@@ -211,7 +214,7 @@ cmd+=( "-c" "$DPDK_APP_CORE_MASK" )
 cmd+=( "-n" "2" )
 cmd+=( "-m" "128" )
 cmd+=( "--" )
-cmd+=( "-T" "1" )
+cmd+=( "-T" "$DPDK_APP_PRINT_INTERVAL" )
 cmd+=( "-p" "$portmask" )
 
 ########################################################################

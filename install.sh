@@ -15,8 +15,16 @@ if [ ! -f $tools_dir/install.sh ]; then
     exit -1
 fi
 
-cp -f $tools_dir/scr/* $TOOLS_DEST_DIR
-cp -f $tools_dir/dpdk/scr/* $TOOLS_DEST_DIR
+opts=()
+opts+=( "--force" )
+opts+=( "--remove-destination" )
+
+list=()
+list+=( $(find $tools_dir/scr -type f) )
+list+=( $(find $tools_dir/dpdk/scr -type f) )
+
+cp ${opts[@]} ${list[@]} $TOOLS_DEST_DIR \
+    || exit -1
 
 # Install GCC
 pkglist=()
