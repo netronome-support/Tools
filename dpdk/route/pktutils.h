@@ -36,6 +36,7 @@ static inline void
 rt_pkt_send_fast (rt_pkt_t pkt, rt_port_index_t port)
 {
     assert(pkt.mbuf != NULL);
+
     tx_pkt_enqueue(port, pkt.mbuf);
 }
 

@@ -15,8 +15,10 @@
 
 #define RT_FWD_F_DISCARD        (1 << 0)
 #define RT_FWD_F_RANDDISC       (1 << 1)
+#define RT_FWD_F_LOCAL          (1 << 2)
 
 #define RT_FWD_F_MASK           (0xff)
+
 /**********************************************************************/
 
 typedef struct __attribute__ ((__packed__)) {
@@ -31,7 +33,7 @@ typedef struct rt_dt_route_s {
     rt_port_info_t *pi;
     rt_port_index_t port;
     uint8_t flags;
-    void *tx_buffer;
+    uint8_t used;
     struct {
         rt_eth_addr_t dst;
         rt_eth_addr_t src;
@@ -60,10 +62,9 @@ typedef struct rt_lpm_s {
     rt_cnt_idx_t cntidx;
 } rt_lpm_t;
 
-#define RT_LPM_F_LOCAL          (1 <<  8)
-#define RT_LPM_F_HAS_NEXTHOP    (1 <<  9)
-#define RT_LPM_F_HAS_PORTINFO   (1 << 10)
-#define RT_LPM_F_SUBNET         (1 << 11)
+#define RT_LPM_F_HAS_NEXTHOP    (1 <<  8)
+#define RT_LPM_F_HAS_PORTINFO   (1 <<  9)
+#define RT_LPM_F_SUBNET         (1 << 10)
 
 /**********************************************************************/
 /* Address Resolution Table */
@@ -118,7 +119,7 @@ rt_dt_hash (const rt_dt_key_t *key)
 }
 
 #define rt_dt_key_compare(key1,key2) \
-    (memcmp((key1), (key2), sizeof(rt_dt_key_t)) == 0)
+    (memcmp((key1), (key2), sizeof(rt_dt_key_t)))
 
 static inline rt_dt_route_t *
 rt_dt_lookup (const rt_dt_key_t *key)
@@ -126,14 +127,16 @@ rt_dt_lookup (const rt_dt_key_t *key)
     uint32_t idx = rt_dt_hash(key);
     rt_dt_route_t *hd = &rt_dt_table[idx];
 
-    if (likely(rt_dt_key_compare(key, &hd->key)))
+    if (likely(rt_dt_key_compare(key, &hd->key) == 0))
         return hd;
 
-    rt_dt_route_t *sp = hd->next;
-    while (likely(sp != hd)) {
-        if (rt_dt_key_compare(key, &hd->key))
+    rt_dt_route_t *sp = hd;
+    for (;;) {
+        if (rt_dt_key_compare(key, &sp->key) == 0)
             return sp;
         sp = sp->next;
+        if (likely(sp == hd))
+            break;
     }
     return NULL;
 }
@@ -143,6 +146,8 @@ rt_dt_route_t *
 void rt_dt_set_fwd_info (rt_dt_route_t *dt, rt_lpm_t *rt, rt_ipv4_ar_t *ar,
     uint8_t flags);
 rt_dt_route_t *rt_dt_create (const rt_dt_route_t *drp);
+rt_dt_route_t *rt_dt_create_exception (rt_port_info_t *pi,
+    rt_ipv4_addr_t ipaddr, uint8_t flags);
 void rt_dt_init (void);
 int rt_dt_sprintf (char *str, const rt_dt_route_t *dt);
 void rt_dt_dump (FILE *fd);

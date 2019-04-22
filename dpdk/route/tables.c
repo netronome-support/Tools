@@ -20,7 +20,6 @@ rt_dt_copy_fwd_info (rt_dt_route_t *dp, const rt_dt_route_t *sp)
         /* Temporarily set the entry to DISCARD */
         dp->flags = RT_FWD_F_DISCARD;
     }
-    dp->tx_buffer = sp->tx_buffer;
     dp->pi = sp->pi;
     dp->port = sp->port;
     memcpy(dp->eth.dst, sp->eth.dst, 6);
@@ -40,14 +39,13 @@ rt_dt_find_or_create (const rt_dt_key_t *key, const rt_dt_route_t *tp)
     rt_dt_route_t *hd = &rt_dt_table[idx];
     rt_dt_route_t *sp;
 
+    int created = 0;
     sem_wait(&rt_dt_lock);
     for (sp = hd ; ; sp = sp->next) {
-        if (rt_dt_key_compare(key, &sp->key))
+        if (rt_dt_key_compare(key, &sp->key) == 0)
             break;
         if (sp->next == hd) {
-            if (hd->pi == NULL) {
-                sp = hd;
-            } else {
+            if ((sp != hd) || (hd->used == 0)) {
                 /* Insert 'ap' at end of list */
                 ap->next = hd;
                 ap->prev = hd->prev;
@@ -62,10 +60,21 @@ rt_dt_find_or_create (const rt_dt_key_t *key, const rt_dt_route_t *tp)
             } else {
                 sp->flags = RT_FWD_F_DISCARD;
             }
+            sp->used = 1;
+            created = 1;
             break;
         }
     }
     sem_post(&rt_dt_lock);
+
+    if (created) {
+        char ts0[20], ts1[20], ts2[20], ts3[20];
+        dbgmsg(INFO, nopkt, "Creating DT (p%u %s %s) -> (p%u %s -> %s)",
+            key->prtidx, rt_hwaddr_str(ts0, key->hwaddr),
+            rt_ipaddr_str(ts1, key->ipaddr),
+            tp->port, rt_hwaddr_str(ts2, tp->eth.src),
+            rt_hwaddr_str(ts3, tp->eth.dst));
+    }
 
     /* If the ap was not used (ap != NULL), then relase it */
     free(ap);
@@ -79,12 +88,10 @@ void rt_dt_set_fwd_info (rt_dt_route_t *dt, rt_lpm_t *rt, rt_ipv4_ar_t *ar,
     assert(rt != NULL);
     rt_port_info_t *pi = rt->pi;
     assert(pi != NULL);
-    assert(rt->pi->tx_buffer != NULL);
 
     sem_wait(&rt_dt_lock);
 
     dt->port = pi->idx;
-    dt->tx_buffer = pi->tx_buffer;
     memcpy(&dt->eth.src, &pi->hwaddr, 6);
     if (ar != NULL) {
         memcpy(&dt->eth.dst, ar->hwaddr, 6);
@@ -103,6 +110,21 @@ rt_dt_create (const rt_dt_route_t *drp)
     assert(np != NULL);
 
     return np;
+}
+
+rt_dt_route_t *
+rt_dt_create_exception (rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
+    uint8_t flags)
+{
+    /* Create a LOCAL Direct-Table Entry */
+    rt_dt_route_t dt;
+    memset(&dt, 0, sizeof(dt));
+    dt.key.prtidx = pi->idx;
+    dt.key.ipaddr = ipaddr;
+    memcpy(dt.key.hwaddr, pi->hwaddr, 6);
+    assert(flags != 0);
+    dt.flags = flags;
+    return rt_dt_create(&dt);
 }
 
 void
@@ -272,8 +294,10 @@ rt_lpm_add_iface_addr (rt_port_info_t *pi,
     }
     /* Add to Local Address Table (for ARP) */
     rt_lat_add(pi, ipaddr, NULL);
+
     /* Add a LOCAL route to the LPM for the IP address */
-    rt_lpm_host_create(pi->rdidx, ipaddr, pi, RT_LPM_F_LOCAL);
+    rt_lpm_host_create(pi->rdidx, ipaddr, pi, RT_FWD_F_LOCAL);
+
     if (plen < 32) {
         /* Create a subnet-route and a host route */
         rt_ipv4_prefix_t prefix;
@@ -324,7 +348,7 @@ rt_lpm_sprintf (char *str, const rt_lpm_t *rt)
         n += sprintf(&str[n], " NH: (%u) %s",
             rt->nh_rdidx, rt_ipaddr_str(tmpstr, rt->nhipa));
     }
-    if (flags & RT_LPM_F_LOCAL) {
+    if (flags & RT_FWD_F_LOCAL) {
         n += sprintf(&str[n], " LOCAL");
     }
     if (flags & RT_LPM_F_HAS_PORTINFO) {

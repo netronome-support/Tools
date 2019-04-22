@@ -49,7 +49,6 @@ rt_pkt_setup_dt (rt_port_info_t *i_pi, rt_ipv4_addr_t ipda,
     dt.pi = e_pi;
     dt.port = e_pi->idx;
     dt.flags = rt->flags & RT_FWD_F_MASK;
-    dt.tx_buffer = e_pi->tx_buffer;
     memcpy(dt.key.hwaddr, i_pi->hwaddr, 6);
     if (ar != NULL) {
         memcpy(dt.eth.dst, ar->hwaddr, 6);
@@ -63,6 +62,7 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
 {
     rt_rd_t rdidx = pkt.rdidx;
     rt_disc_cause_t reason = RT_DISC_DROP;
+
     rt_lpm_t *rt = rt_lpm_lookup(rdidx, ipda);
     if (rt == NULL) {
         /* No Route - Discard */
@@ -75,7 +75,10 @@ rt_pkt_ipv4_send (rt_pkt_t pkt, rt_ipv4_addr_t ipda, int flags)
     uint32_t rt_flags = rt->flags;
     rt_ipv4_addr_t nhipa = ipda;
 
-    if (rt_flags & RT_LPM_F_LOCAL) {
+    if (rt_flags & RT_FWD_F_LOCAL) {
+        if (pkt.pi != NULL) {
+            rt_dt_create_exception(pkt.pi, ipda, RT_FWD_F_LOCAL);
+        }
         rt_pkt_ipv4_local_process(pkt);
         return;
     }
@@ -161,6 +164,10 @@ rt_pkt_dt_process (rt_pkt_t pkt, rt_dt_route_t *drp)
                 rt_pkt_discard(pkt, RT_DISC_DROP);
                 return;
             }
+        }
+        if (drp->flags & RT_FWD_F_LOCAL) {
+            rt_pkt_ipv4_local_process(pkt);
+            return;
         }
     }
     /* Update MAC addresses */

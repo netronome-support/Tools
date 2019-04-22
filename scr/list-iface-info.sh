@@ -23,6 +23,7 @@ re_pciaddr='^'"$f_pciaddr"'$'
 declare -A if_db_ifname
 declare -A if_db_driver
 declare -A if_db_type
+declare -A if_db_index
 declare -A if_db_addr
 if_db_list=()
 ########################################################################
@@ -34,6 +35,7 @@ Options:
   -h|--help             - Print this help information
   -d|--driver <name>    - Only list netdevs with specified driver
   -t|--type <type>      - Only list netdevs with specified type
+  -i|--index <index>    - Only list netdevs with specified index
   -a|--addr <address>   - Only list netdevs with specified address
   -b|--brief            - Only list netdev names
 EOF
@@ -52,6 +54,7 @@ for arg in $@ ; do
             ;;
         "-d"|"--driver") param="driver" ;;
         "-t"|"--type") param="type" ;;
+        "-i"|"--index") param="index" ;;
         "-a"|"--addr") param="addr" ;;
         "-b"|"--brief") opt_format="brief" ;;
         *)
@@ -63,6 +66,7 @@ for arg in $@ ; do
         case "$param" in
         "driver")   opt_driver="$arg" ;;
         "type")     opt_type="$arg" ;;
+        "index")    opt_index="$arg" ;;
         "addr")     opt_addr="$arg" ;;
         esac
         param=""
@@ -73,6 +77,7 @@ done
 ##  List interfaces with their driver and bus-info
 
 for ifname in $list ; do
+    index="" ; addr=""
     if [ "$ifname" == "lo" ]; then
         continue
     fi
@@ -88,14 +93,14 @@ for ifname in $list ; do
         continue
     fi
     if [[ "$businfo" =~ $re_nfp_vf ]]; then
-        idx=$(echo $businfo \
+        index=$(echo $businfo \
             | sed -rn 's/^.*\sVF.\.([0-9]+)\s.*$/\1/p')
         pciaddr=$(echo $businfo \
             | sed -rn 's/^.*\s(\S+)$/\1/p')
 
         printf -v s_ifname "d-vf-%02u" $idx
         type="VF-R"
-        printf -v addr "%2u (%s)" "$idx" "$pciaddr"
+        printf -v addr "%s" "$pciaddr"
     elif [[ "$businfo" =~ $re_pciaddr ]]; then
         printf -v s_ifname "e-pci-%s" $businfo
         type="PCI"
@@ -109,32 +114,31 @@ for ifname in $list ; do
             re_pf='^pf[0-9]+$'
             re_vf='^pf[0-9]+vf[0-9]+$'
             if [[ "$phys_port" =~ $re_p ]]; then
-                idx=${phys_port#p}
+                index=${phys_port#p}
                 printf -v s_ifname "b-p-%02u" $idx
                 type="P"
-                addr="$idx"
             elif [[ "$phys_port" =~ $re_pf ]]; then
-                idx=${phys_port#pf}
+                index=${phys_port#pf}
                 printf -v s_ifname "c-pf-%02u" $idx
                 type="PF"
-                addr="$idx"
             elif [[ "$phys_port" =~ $re_vf ]]; then
-                idx=${phys_port#*vf}
+                index=${phys_port#*vf}
                 printf -v s_ifname "d-vf-%02u" $idx
                 type="VF-R"
-                addr="$idx"
             elif [ "$phys_port" == "" ]; then
                 re_nfp_p_ifname='^nfp_p[0-9]$'
                 if [[ "$ifname" =~ $re_nfp_p_ifname ]]; then
-                    idx=${ifname#nfp_p}
+                    index=${ifname#nfp_p}
                     printf -v s_ifname "b-p-%02u" $idx
                     type="P"
-                    addr="$idx"
                 fi
             fi
         fi
     fi
     if [ "$opt_type" != "" ] && [ "$opt_type" != "$type" ]; then
+        continue
+    fi
+    if [ "$opt_index" != "" ] && [ "$opt_index" != "$index" ]; then
         continue
     fi
     if [ "$opt_addr" != "" ] && [ "$opt_addr" != "$addr" ]; then
@@ -144,6 +148,7 @@ for ifname in $list ; do
     if_db_ifname[$s_ifname]="$ifname"
     if_db_driver[$s_ifname]="$driver"
     if_db_type[$s_ifname]="$type"
+    if_db_index[$s_ifname]="$index"
     if_db_addr[$s_ifname]="$addr"
     if_db_list+=( "$s_ifname" )
 done
@@ -163,10 +168,11 @@ for s_ifname in $s_if_list ; do
         printf "%s\n" "${if_db_ifname[$s_ifname]}"
         ;;
       *)
-        printf "  %-16s %-14s %-5s %s\n" \
+        printf "  %-16s %-14s %-5s %2s %s\n" \
             "${if_db_ifname[$s_ifname]}" \
             "${if_db_driver[$s_ifname]}" \
             "${if_db_type[$s_ifname]}" \
+            "${if_db_index[$s_ifname]}" \
             "${if_db_addr[$s_ifname]}"
     esac
 done

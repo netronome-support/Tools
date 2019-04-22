@@ -75,7 +75,7 @@ rt_arp_learn (rt_pkt_t pkt, rt_port_info_t *pi, rt_ipv4_addr_t ipaddr,
         return;
     }
     if (rt->prefix.len == 32) {
-        if (rt->flags & RT_LPM_F_LOCAL) {
+        if (rt->flags & RT_FWD_F_LOCAL) {
             dbgmsg(WARN, pkt, "ARP with conflicting IP address (%u) %s",
                 pkt.rdidx, rt_ipaddr_nr_str(ipaddr));
             return;
