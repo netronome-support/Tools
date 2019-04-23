@@ -368,6 +368,15 @@ if [ ! -d $DPDK_SETTINGS_DIR ]; then
 fi
 
 ########################################
+##  Locate the 'igb_uio' driver
+
+igb_uio_drv_file=$(find $RTE_SDK -type f -name 'igb_uio.ko' \
+    | head -1)
+
+test "$igb_uio_drv_file" != ""
+    check_status "build did not produce an igb_uio driver"
+
+########################################
 ##  Save DPDK settings
 
 cat <<EOF > $conffile
@@ -404,15 +413,6 @@ fi
 if [ ! -h $RTE_SDK/$RTE_TARGET ]; then
     ln -sf $RTE_SDK/build $RTE_SDK/$RTE_TARGET
 fi
-
-########################################
-##  Locate the 'igb_uio' driver
-
-igb_uio_drv_file=$(find $RTE_SDK -type f -name 'igb_uio.ko' \
-    | head -1)
-
-test "$igb_uio_drv_file" != ""
-    check_status "build did not produce an igb_uio driver"
 
 ########################################
 

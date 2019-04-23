@@ -91,7 +91,6 @@ fi
 sshopts+=( "-l" "${SSH_USERNAME-"root"}" )
 sshcmd="ssh ${sshopts[@]}"
 ########################################
-ropts+=( "" )
 ropts+=( "--recursive" )
 ropts+=( "--copy-links" )
 ropts+=( "--update" )
