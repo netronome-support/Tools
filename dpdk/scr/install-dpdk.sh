@@ -103,15 +103,27 @@ test "${version}${pkgfile}${pkgdir}" != ""
     check_status "please specify either version, package file, or package directory"
 
 ########################################
+function get_setting () {
+    local file="$1"
+    local varname="$2"
+    cat $file \
+        | sed -r 's/^export\s+//' \
+        | sed -rn "s/^${varname}=(\S+)\$/\1/p" \
+        | tr --delete "\"'"
+}
+########################################
+
 
 function check_installation () {
     if [ -f "$conffile" ]; then
-        OLD_RTE_SDK=$(cat $conffile | sed -rn 's/^RTE_SDK=(\S+)$/\1/p')
-        OLD_DEVBIND=$(cat $conffile | sed -rn 's/^DPDK_DEVBIND=(\S+)$/\1/p')
-        OLD_IGB_UIO_DRV=$(cat $conffile | sed -rn 's/^DPDK_IGB_UID_DRV=(\S+)$/\1/p')
+        OLD_RTE_SDK=$(              get_setting "$conffile" "RTE_SDK")
+        OLD_DEVBIND=$(              get_setting "$conffile" "DPDK_DEVBIND")
+        OLD_IGB_UIO_DRV=$(          get_setting "$conffile" "DPDK_IGB_UID_DRV")
+        OLD_DPDK_BUILD_KERNEL=$(    get_setting "$conffile" "DPDK_BUILD_KERNEL")
         test -d $OLD_RTE_SDK            || install="yes"
         test -f $OLD_DPDK_DEVBIND       || install="yes"
         test -f $OLD_DPDK_IGB_UIO_DRV   || install="yes"
+        test "$OLD_DPDK_BUILD_KERNEL" == "$(uname -r)" || install="yes"
     else
         install="yes"
     fi
@@ -388,6 +400,7 @@ export DPDK_DEVBIND="$devbind"
 # List of enabled RTE components:
 export DPDK_CFG_LIBRTE_LIST="$DPDK_CFG_LIBRTE_LIST"
 export DPDK_BUILD_TIME="$(date +'%s')"
+export DPDK_BUILD_KERNEL="$(uname -r)"
 export DPDK_CONFIG="$buildconfig"
 export DPDK_IGB_UIO_DRV="$igb_uio_drv_file"
 EOF
