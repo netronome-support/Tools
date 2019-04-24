@@ -103,28 +103,34 @@ test "${version}${pkgfile}${pkgdir}" != ""
     check_status "please specify either version, package file, or package directory"
 
 ########################################
-function get_setting () {
-    local file="$1"
-    local varname="$2"
-    cat $file \
-        | sed -r 's/^export\s+//' \
-        | sed -rn "s/^${varname}=(\S+)\$/\1/p" \
-        | tr --delete "\"'"
-}
-########################################
-
 
 function check_installation () {
-    if [ -f "$conffile" ]; then
-        OLD_RTE_SDK=$(              get_setting "$conffile" "RTE_SDK")
-        OLD_DEVBIND=$(              get_setting "$conffile" "DPDK_DEVBIND")
-        OLD_IGB_UIO_DRV=$(          get_setting "$conffile" "DPDK_IGB_UID_DRV")
-        OLD_DPDK_BUILD_KERNEL=$(    get_setting "$conffile" "DPDK_BUILD_KERNEL")
-        test -d $OLD_RTE_SDK            || install="yes"
-        test -f $OLD_DPDK_DEVBIND       || install="yes"
-        test -f $OLD_DPDK_IGB_UIO_DRV   || install="yes"
-        test "$OLD_DPDK_BUILD_KERNEL" == "$(uname -r)" || install="yes"
-    else
+    local fname="$1"
+    if [ ! -f "$fname" ]; then
+        install="yes"
+        return
+    fi
+    mapfile -t cfglist < \
+       <( cat $fname \
+        | sed -r 's/^\s*export\s+//' \
+        | sed -r 's/\s*#.*$//' \
+        | sed '/^$/d' \
+        | tr -d '\"' \
+        )
+    declare -A oldcfg
+    oldcfg={}
+    for entry in "${cfglist[@]}" ; do
+        oldcfg[${entry/=*}]="${entry/*=}"
+    done
+    if  [ "${oldcfg[RTE_SDK]}" == "" ] ||
+        [ "${oldcfg[RTE_TARGET]}" == "" ] ||
+        [ ! -d "${oldcfg[RTE_SDK]}" ] ||
+        [ ! -f "${oldcfg[DPDK_IGB_UIO_DRV]}" ] ||
+        [ "${oldcfg[RTE_TARGET]}" != "$RTE_TARGET" ] ||
+        [ "${oldcfg[DPDK_VERSION]}" != "$version" ] ||
+        [ "${oldcfg[DPDK_CFG_LIBRTE_LIST]}" != "$DPDK_CFG_LIBRTE_LIST" ] ||
+        [ "${oldcfg[DPDK_BUILD_KERNEL]}" != "$(uname -r)" ];
+    then
         install="yes"
     fi
 }
@@ -184,7 +190,7 @@ install-packages.sh ${prereqs[@]} --update
 
 if [ "$version" != "" ]; then
     conffile="/etc/$pkgname-$version.conf"
-    check_installation
+    check_installation "$conffile"
 
     if [ "$install" == "" ]; then
         exit 0
@@ -250,7 +256,7 @@ fi
 ########################################
 
 conffile="$DPDK_SETTINGS_DIR/$pkgname-$version.conf"
-check_installation
+check_installation "$conffile"
 
 ########################################
 ##  Stop here if it appears to already been installed

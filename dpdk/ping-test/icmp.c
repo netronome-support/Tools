@@ -3,6 +3,8 @@
 #include "dbgmsg.h"
 #include "functions.h"
 
+#include <rte_cycles.h>
+
 static inline void
 icmp_set_chksum (void *p, int len)
 {
