@@ -128,11 +128,17 @@ function check_installation () {
         [ ! -f "${oldcfg[DPDK_IGB_UIO_DRV]}" ] ||
         [ "${oldcfg[RTE_TARGET]}" != "$RTE_TARGET" ] ||
         [ "${oldcfg[DPDK_VERSION]}" != "$version" ] ||
-        [ "${oldcfg[DPDK_CFG_LIBRTE_LIST]}" != "$DPDK_CFG_LIBRTE_LIST" ] ||
         [ "${oldcfg[DPDK_BUILD_KERNEL]}" != "$(uname -r)" ];
     then
         install="yes"
     fi
+    for feature in $DPDK_CFG_LIBRTE_LIST ; do
+        echo " ${oldcfg[DPDK_CFG_LIBRTE_LIST]} " \
+            | grep -E "\s$feature\s" > /dev/null
+        if [ $? -ne 0 ]; then
+            install="yes"
+        fi
+    done
 }
 
 ########################################
@@ -323,12 +329,12 @@ make ${opts[@]} config 2>&1 \
 
 ########################################
 # Remove Duplicates
-DPDK_CFG_LIBRTE_LIST=$(printf "%s\n" $DPDK_CFG_LIBRTE_LIST \
-    | sort -u )
+DPDK_CFG_LIBRTE_LIST=( $(printf "%s\n" $DPDK_CFG_LIBRTE_LIST \
+    | sort -u ) )
 ########################################
 ss=""
 ########################################
-for item in $DPDK_CFG_LIBRTE_LIST ; do
+for item in ${DPDK_CFG_LIBRTE_LIST[@]} ; do
     ss="${ss}s/(CONFIG_RTE_LIBRTE_$item)=.*"'$/\1=y/;'
 done
 ########################################
@@ -395,6 +401,12 @@ test "$igb_uio_drv_file" != ""
     check_status "build did not produce an igb_uio driver"
 
 ########################################
+##  Locate the 'dpdk-devbind.py' driver
+
+DPDK_DEVBIND=$(find $RTE_SDK -name 'dpdk-devbind.py' \
+    | head -1)
+
+########################################
 ##  Save DPDK settings
 
 cat <<EOF > $conffile
@@ -402,13 +414,12 @@ cat <<EOF > $conffile
 export RTE_SDK="$RTE_SDK"
 export RTE_TARGET="$RTE_TARGET"
 export DPDK_VERSION="$version"
-export DPDK_DEVBIND="$devbind"
-# List of enabled RTE components:
-export DPDK_CFG_LIBRTE_LIST="$DPDK_CFG_LIBRTE_LIST"
+export DPDK_CFG_LIBRTE_LIST="${DPDK_CFG_LIBRTE_LIST[@]}"
 export DPDK_BUILD_TIME="$(date +'%s')"
 export DPDK_BUILD_KERNEL="$(uname -r)"
 export DPDK_CONFIG="$buildconfig"
 export DPDK_IGB_UIO_DRV="$igb_uio_drv_file"
+export DPDK_DEVBIND="$DPDK_DEVBIND"
 EOF
 
 ########################################
@@ -435,11 +446,8 @@ fi
 
 ########################################
 
-devbind=$(find $RTE_SDK -name 'dpdk-devbind.py' \
-    | head -1)
-
-if [ -f "$devbind" ] && [ "$optSkipBuild" == "" ]; then
-    $SUDO cp -f $devbind /usr/local/bin
+if [ -f "$DPDK_DEVBIND" ] && [ "$optSkipBuild" == "" ]; then
+    $SUDO cp -f $DPDK_DEVBIND /usr/local/bin
 
         check_status "failed to copy dpdk-devbind.py"
 fi

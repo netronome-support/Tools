@@ -87,19 +87,28 @@ function get_devname () {
 
 ########################################################################
 
-type=$( lspci -s $bdf -n | cut -d ' ' -f 3 )
-p_driver=""
-b_driver=""
+pci_type=$( lspci -s $bdf -n | cut -d ' ' -f 3 )
+pci_vendor=${pci_type/:*}
+pci_device=${pci_type/*:}
 
-case "$type" in
-    "19ee:6003") vftype="NFP"
-        b_driver="nfp_netvf" ; p_driver="nfp" ;;
-    "1af4:1000") vftype="VirtIO"
-        b_driver="virtio-pci" ; p_driver="virtio-pci" ;;
-    *)
-        echo "ERROR: unidentified interface type $type on $(hostname)"
-        exit -1
-esac
+probe_drivers=""
+netdev_driver=""
+dpdk_driver="igb_uio"
+
+if [ "$pci_vendor" == "19ee" ]; then
+    # Netronome NFP
+    netdev_driver="nfp_netvf"
+    probe_driver="nfp"
+elif  [ "$pci_vendor" == "15b3" ]; then
+    # Mellanox
+    netdev_driver="mlx5_core"
+    dpdk_driver="mlx5_core"
+elif [ "$pci_type" == "1af4:1000" ]; then
+    # Red Hat VirtIO networ device
+    netdev_driver="virtio-pci"
+else
+    false ; check_status "unidentified interface type $type on $(hostname)"
+fi
 
 if [ "$mode" != "netdev" ]; then
     get_devname "$bdf"
@@ -110,22 +119,17 @@ if [ "$mode" != "netdev" ]; then
 fi
 
 case "$mode" in
-  "dpdk")
-    b_driver="igb_uio"
-    ;;
-  "netdev")
-    ;;
-  "none")
-    driver="none"
-    ;;
+  "dpdk")   driver="$dpdk_driver" ;;
+  "netdev") driver="$netdev_driver" ;;
+  "none")   driver="none" ;;
   *)
     echo "ERROR: unknown mode '$mode'"
     exit -1
 esac
 
-if [ "$p_driver" != "" ] && [ "$p_driver" != "$b_driver" ]; then
-    modprobe $p_driver
-        check_status "'modprobe $p_driver' failed"
-fi
+for drv in $probe_drivers $driver ; do
+    modprobe $drv
+        check_status "'modprobe $drv' failed"
+done
 
-exec set-device-driver.sh --driver $b_driver $bdf
+exec set-device-driver.sh --driver $driver $bdf
