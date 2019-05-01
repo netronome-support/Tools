@@ -31,6 +31,7 @@ pkt_process (__attribute__((unused)) int prtidx,
     pkt.mbuf = mbuf;
     pkt.eth = rte_pktmbuf_mtod(mbuf, void *);
     pkt.r_tsc = tsc;
+    pkt.pi = NULL;
 
     uint16_t ethtype = ntohs(pkt.eth->ethtype);
 

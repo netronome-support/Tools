@@ -53,7 +53,7 @@ total = 0.0
 for item in llist:
     total = total + item
 
-print_sample('Average', int(total / llen))
+print_result('Average', total / llen)
 
 print_sample('Best', 0)
 print_sample('Worst', llen - 1)
