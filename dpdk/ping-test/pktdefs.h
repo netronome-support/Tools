@@ -46,7 +46,6 @@ typedef struct {
 
 typedef struct {
     struct rte_mbuf *mbuf;
-    port_info_t *pi; /* Receive Port */
     uint32_t r_tsc;
     eth_hdr_t *eth;
     struct {

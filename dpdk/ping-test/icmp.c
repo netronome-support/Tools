@@ -72,7 +72,6 @@ void icmp_gen_request (ipv4_addr_t ipda)
     /* Create new packet for ARP request */
     pkt_t pkt;
     pkt_create(&pkt);
-    pkt.pi = NULL;
 
     pkt_set_length(pkt, g.pktsize);
 

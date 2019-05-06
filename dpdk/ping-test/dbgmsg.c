@@ -91,11 +91,6 @@ void f_dbgmsg (dbgmsg_state_t *dbgstate,
     }
     n += sprintf(&str[n], "%s ", lvlstr);
 
-    if (pkt.pi != NULL)
-        n += sprintf(&str[n], "%3u  ", pkt.pi->idx);
-    else
-        n += sprintf(&str[n], "     ");
-
     va_list ap;
     va_start(ap, fmt);
     int rc = vsnprintf(&str[n], 2048, fmt, ap);
@@ -130,7 +125,6 @@ void dbgmsg_hexdump (void *data, int len)
 void dbgmsg_init (void)
 {
     nopkt.mbuf = NULL;
-    nopkt.pi = NULL;
     dbg_speed_factor = (float) DBG_CREDIT_UNIT / (float) rte_get_tsc_hz();
     dbgmsg_globals.log_level = INFO;
     dbgmsg_globals.log_packets = 0;
