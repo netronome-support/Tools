@@ -78,6 +78,8 @@
 
 global_t g;
 
+icmp_stats_t icmp_stats;
+
 #define RTE_LOGTYPE_ROUTE RTE_LOGTYPE_USER1
 
 #define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
@@ -156,11 +158,16 @@ main (int argc, char **argv)
 
     port_setup();
 
-    check_all_ports_link_status();
+    rc = check_all_ports_link_status();
+    if (rc < 0)
+        return rc;
 
     latency_setup();
 
     lcore_rc = 0;
+
+    printf("Test Starting\n");
+    fflush(stdout);
 
     /* launch per-lcore init on every lcore */
     rte_eal_mp_remote_launch(launch_one_lcore, NULL, CALL_MASTER);
@@ -173,15 +180,18 @@ main (int argc, char **argv)
     }
 
     FOREACH_PORT(prtidx) {
-        printf("Closing port %d...", prtidx);
         rte_eth_dev_stop(prtidx);
         rte_eth_dev_close(prtidx);
-        printf(" Done\n");
     }
+
+    printf("Test Done\n");
+    fflush(stdout);
 
     rc = latency_print();
     if (rc < 0)
         return rc;
+
+    icmp_print_stats();
 
     if (g.dump_fname != NULL) {
         latency_dump(g.dump_fname);

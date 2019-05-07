@@ -11,6 +11,7 @@ void pkt_ipv4_send (pkt_t pkt, ipv4_addr_t ipda);
 void arp_process (pkt_t pkt);
 void arp_generate (pkt_t pkt, ipv4_addr_t ipda);
 
+void icmp_print_stats (void);
 void icmp_process (pkt_t pkt);
 void icmp_gen_request (ipv4_addr_t ipda);
 

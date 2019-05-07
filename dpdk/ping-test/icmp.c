@@ -5,6 +5,18 @@
 
 #include <rte_cycles.h>
 
+void
+icmp_print_stats (void)
+{
+    #define FMT "%-24s  %14lu\n"
+    printf(FMT, "[TX] Transmitted:",    icmp_stats.tx_pkt_cnt);
+    printf(FMT, "[RX] Received:",       icmp_stats.rx_pkt_cnt);
+    printf(FMT, "[LT] Lost:",           icmp_stats.tx_pkt_cnt
+                                      - icmp_stats.rx_pkt_cnt);
+    printf(FMT, "[OO] Out-of-order:",   icmp_stats.out_of_order);
+    printf("\n");
+}
+
 static inline void
 icmp_set_chksum (void *p, int len)
 {
@@ -48,6 +60,17 @@ icmp_request (pkt_t pkt, void *icmp)
     pkt_ipv4_send(pkt, ntohl(ripa));
 }
 
+static inline void
+icmp_process_sequence_number (uint16_t rsn)
+{
+    uint16_t esn = icmp_stats.rx_seq_num + 1; /* Expected SN */
+    int16_t diff = (int16_t) (esn - rsn);
+    if (unlikely(diff != 0)) {
+        icmp_stats.out_of_order++;
+    }
+    icmp_stats.rx_seq_num = rsn;
+}
+
 static void
 icmp_proc_reply (pkt_t pkt, __attribute__((unused)) void *icmp)
 {
@@ -61,13 +84,14 @@ icmp_proc_reply (pkt_t pkt, __attribute__((unused)) void *icmp)
     uint32_t t_tsc = ntohl(*PTR(pkt.pp.l3, uint32_t, 28));
     uint32_t diff = pkt.r_tsc - t_tsc;
     latency_save(diff);
+    icmp_process_sequence_number(ntohs(((icmp_hdr_t *) icmp)->seq));
     pkt_discard(pkt);
+    icmp_stats.rx_pkt_cnt++;
     return;
 }
 
 void icmp_gen_request (ipv4_addr_t ipda)
 {
-    static uint16_t ping_seq = 1;
     int pktsize = g.pktsize;
     /* Create new packet for ARP request */
     pkt_t pkt;
@@ -94,7 +118,7 @@ void icmp_gen_request (ipv4_addr_t ipda)
     icmp->type = 8; /* ICMP echo request */
     icmp->code = 0;
     icmp->ident = htons(0xfee1);
-    icmp->seq = htons(ping_seq++);
+    icmp->seq = htons(++icmp_stats.tx_seq_num);
 
     /* Set ICMP Ping time-stamp in payload */
     ((uint32_t *) icmp)[2] = htonl(rte_rdtsc());
@@ -102,6 +126,8 @@ void icmp_gen_request (ipv4_addr_t ipda)
     icmp_set_chksum(icmp, pktsize);
 
     pkt_ipv4_send(pkt, ipda);
+
+    icmp_stats.tx_pkt_cnt++;
 }
 
 void icmp_process (pkt_t pkt)

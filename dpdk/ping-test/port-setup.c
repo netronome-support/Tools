@@ -139,7 +139,7 @@ int port_desc_count (void)
 }
 
 /* Check the link status of all ports in up to 9s, and print them finally */
-void
+int
 check_all_ports_link_status (void)
 {
     #define CHECK_INTERVAL 100 /* 100ms */
@@ -147,15 +147,13 @@ check_all_ports_link_status (void)
     uint8_t count, all_ports_up, print_flag = 0;
     struct rte_eth_link link;
 
-    printf("\nChecking link status");
-    fflush(stdout);
-    for (count = 0 ; count < MAX_CHECK_TIME ; count++) {
+    for (count = 0 ;; count++) {
         if (g.force_quit)
-            return;
+            return -1;
         all_ports_up = 1;
         FOREACH_PORT(prtidx) {
             if (g.force_quit)
-                return;
+                return -1;
             memset(&link, 0, sizeof(link));
             rte_eth_link_get_nowait(prtidx, &link);
             /* print link status if flag set */
@@ -178,8 +176,13 @@ check_all_ports_link_status (void)
             }
         }
         /* after finally printing all link status, get out */
-        if (print_flag == 1)
-            break;
+        if (print_flag == 1) {
+            fflush(stdout);
+            if (all_ports_up == 0)
+                return -1;
+            else
+                return 0;
+        }
 
         if (all_ports_up == 0) {
             printf(".");
@@ -190,7 +193,6 @@ check_all_ports_link_status (void)
         /* set the print_flag if all ports up or timeout */
         if (all_ports_up == 1 || count == (MAX_CHECK_TIME - 1)) {
             print_flag = 1;
-            printf("done\n");
         }
     }
 }

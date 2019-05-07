@@ -66,6 +66,6 @@ void port_table_init (void);
 /* port-setup.c */
 int port_setup (void);
 int port_desc_count (void);
-void check_all_ports_link_status (void);
+int check_all_ports_link_status (void);
 
 #endif

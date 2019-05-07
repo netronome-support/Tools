@@ -22,10 +22,12 @@ void latency_setup (void)
 
 void latency_save (uint32_t tsc)
 {
-    total += tsc;
-    if (samples < la_size)
-        lap[samples] = tsc;
-    samples++;
+    if (likely(g.measure_latency)) {
+        total += tsc;
+        if (samples < la_size)
+            lap[samples] = tsc;
+        samples++;
+    }
 }
 
 int latency_print (void)

@@ -32,6 +32,7 @@ typedef uint32_t ipv4_addr_t;
 typedef struct {
     bool force_quit;
     bool have_hwaddr;
+    bool measure_latency;
     port_index_t prtidx;
     ipv4_addr_t l_ipv4_addr;
     ipv4_addr_t r_ipv4_addr;
@@ -62,6 +63,17 @@ global_init (void)
     g.pktsize = 14 + 20 + 8 + 8;
     g.count = 0;
 }
+
+typedef struct {
+    uint64_t tx_pkt_cnt;
+    uint64_t rx_pkt_cnt;
+    uint64_t out_of_order;
+    /* Sequence Numbers */
+    uint16_t tx_seq_num; /* For last generated ICMP */
+    uint16_t rx_seq_num; /* For most recently received ICMP */
+} icmp_stats_t;
+
+extern icmp_stats_t icmp_stats;
 
 #define MAX_RX_QUEUE_PER_LCORE 16
 #define MAX_TX_QUEUE_PER_PORT 16
