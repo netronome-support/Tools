@@ -28,19 +28,33 @@ function run () {
     fi
 }
 ########################################################################
+which git > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    if which yum > /dev/null 2>&1 ; then
+        run yum install -y git
+    elif which apt-get > /dev/null 2>&1 ; then
+        run apt-get update
+        run apt-get install -y git
+    else
+        false ; check_status "missing package management tool"
+    fi
+fi
+########################################################################
 
 if [ ! -d $GIT_NS_TOOLS_REPO_DIR ]; then
     run git clone $GIT_URL $GIT_NS_TOOLS_REPO_DIR
 else
-    run git -C $GIT_NS_TOOLS_REPO_DIR fetch
+    cd $GIT_NS_TOOLS_REPO_DIR
+    run git fetch
 fi
 
 ########################################################################
 
 set -o pipefail
 cmpcnt=$( \
-    ( git -C $GIT_NS_TOOLS_REPO_DIR status --short ; \
-      git -C $GIT_NS_TOOLS_REPO_DIR diff origin/master --name-status \
+    ( cd $GIT_NS_TOOLS_REPO_DIR && \
+      git status --short && \
+      git diff origin/master --name-status \
     ) | wc --lines | cut -d ' ' -f 1 \
     )
     check_status "failed to check status of GIT repo"
@@ -48,9 +62,10 @@ cmpcnt=$( \
 if [ $cmpcnt -ne 0 ]; then
     # GIT Repository is not 'clean', make a copy
     run cp -r $GIT_NS_TOOLS_REPO_DIR $tmpdir
-    run git -C $tmpdir/Tools reset --hard
-    run git -C $tmpdir/Tools checkout master
-    run git -C $tmpdir/Tools merge origin/master
+    cd $tmpdir/Tools
+    run git reset --hard
+    run git checkout master
+    run git merge origin/master
     GIT_NS_TOOLS_REPO_DIR="$tmpdir/Tools"
 fi
 

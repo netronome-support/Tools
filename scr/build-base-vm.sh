@@ -32,11 +32,20 @@
 ########################################################################
 ##  CentOS
 
+# CentOS 7 Build Number
+: "${CENTOS_BUILD_INDEX:=1811}"
+: "${CENTOS_VERSION:=7}"
+: "${CENTOS_ARCH:=x86_64}"
+
 # URL for CentOS Cloud Images
-: "${CENTOS_URL:=https://cloud.centos.org/centos/7/images}"
+: "${CENTOS_URL:=https://cloud.centos.org/centos/$CENTOS_VERSION/images}"
+
+# Default File Name
+dfname="Centos-$CENTOS_VERSION-$CENTOS_ARCH"
+dfname="$dfname-GenericCloud-${CENTOS_BUILD_INDEX}.qcow2"
 
 # CentOS Cloud Image File
-: "${CENTOS_IMAGE_FILE:=CentOS-7-x86_64-GenericCloud-1708.qcow2}"
+: "${CENTOS_IMAGE_FILE:=$dfname}"
 
 ########################################################################
 ##  Ubuntu 
@@ -66,7 +75,7 @@ case "$BASE_IMAGE_OS" in
   "CentOS"|"centos")
     : "${IMAGE_URL:=$CENTOS_URL}"
     : "${IMAGE_FILE:=$CENTOS_IMAGE_FILE}"
-    : "${IMAGE_NAME:=CentOS-1708-base}"
+    : "${IMAGE_NAME:=CentOS-${CENTOS_VERSION}-${CENTOS_IMAGE_BUILD_INDEX}-base}"
     OS_PKG_TOOL="yum"
     ;;
   "Ubuntu"|"ubuntu")
