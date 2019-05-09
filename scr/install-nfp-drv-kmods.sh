@@ -53,8 +53,9 @@ pkgs+=( "git@" "make@" "gcc@" )
 #pkgs+=( "build-essential" )
 
 # Kernel Header Files:
-pkgs+=( "/usr/src/kernels/$(uname -r)/include@centos:kernel-devel" )
-pkgs+=( "/usr/src/linux-headers-$(uname -r)/include@ubuntu:linux-headers-$(uname -r)" )
+kvers=$(uname -r)
+pkgs+=( "/usr/src/kernels/${kvers}/include@centos:kernel-devel-${kvers}" )
+pkgs+=( "/usr/src/linux-headers-${kvers}/include@ubuntu:linux-headers-${kvers}" )
 
 # The following is needed for 'Signing Kernel module'
 pkgs+=( "openssl@" "perl@" "mokutil@" )

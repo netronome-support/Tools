@@ -42,29 +42,6 @@ mkdir -p $rfsdir
 mkdir -p $rfsdir/etc/profile.d
 
 ########################################################################
-mkdir -p $rfsdir/root
-touch $rfsdir/root/.hushlogin
-
-########################################################################
-##  Setup NetPlan
-
-mkdir -p $rfsdir/etc/netplan
-mkdir -p $rfsdir/etc/cloud/cloud.cfg.d
-cat <<EOF > $rfsdir/etc/netplan/80-base-vm-interfaces.yaml
-network:
-    version: 2
-    ethernets:
-        id0:
-            match: 
-                name: en*
-            dhcp4: true
-            optional: true
-EOF
-cat <<EOF > $rfsdir/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
-network: {config: disabled}
-EOF
-
-########################################################################
 ##  Setup Netronome Profile file
 
 cat <<EOF > $rfsdir/etc/profile.d/ns-path.sh
@@ -102,41 +79,13 @@ rsync-vm.sh --vm-name "$VM_NAME" \
     check_status "failed to transfer files to VM"
 
 ########################################################################
-##  Packages to install on the VM
-
-vmpkglist=()
-vmpkglist+=( "git" "wget" "strace" "gawk" "unzip" "zip" "bc" )
-vmpkglist+=( "expect" )
-vmpkglist+=( "ntp" )
-vmpkglist+=( "tmux" )
-vmpkglist+=( "tcpdump" )
-vmpkglist+=( "iperf3" )
-vmpkglist+=( "ifupdown" )
-vmpkglist+=( "pciutils" "python" ) # dpdk-devbind
-vmpkglist+=( "socat" ) # dpdk-pktgen
-vmpkglist+=( "vnstat" ) # Interface Rate Testing tool
-vmpkglist+=( "hping3" ) # TCP-based ping
-vmpkglist+=( "bwm-ng" ) # Bandwidth Monitoring Tool
-vmpkglist+=( "fping" ) # Bandwidth Monitoring Tool
-
-########################################################################
-##  
+echo " - run setup script on VM"
 
 scr="true"
 
 scr="$scr && install-netronome-support-tools.sh"
 
-scr="$scr && apt-get update"
-
-scr="$scr && install-packages.sh --update ${vmpkglist[@]}"
-
-scr="$scr && systemctl disable ntp"
-
-scr="$scr && install-nfp-drv-kmods.sh"
-
-scr="$scr && install-dpdk.sh $VM_BUILD_DPDK_VERSION"
-
-########################################################################
+scr="$scr && setup-base-vm-tools.sh"
 
 scr="$scr && echo SUCCESS"
 

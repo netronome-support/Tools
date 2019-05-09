@@ -75,7 +75,7 @@ case "$BASE_IMAGE_OS" in
   "CentOS"|"centos")
     : "${IMAGE_URL:=$CENTOS_URL}"
     : "${IMAGE_FILE:=$CENTOS_IMAGE_FILE}"
-    : "${IMAGE_NAME:=CentOS-${CENTOS_VERSION}-${CENTOS_IMAGE_BUILD_INDEX}-base}"
+    : "${IMAGE_NAME:=CentOS-${CENTOS_VERSION}-${CENTOS_BUILD_INDEX}-base}"
     OS_PKG_TOOL="yum"
     ;;
   "Ubuntu"|"ubuntu")
