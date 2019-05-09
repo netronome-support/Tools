@@ -87,6 +87,10 @@ scr="$scr && install-netronome-support-tools.sh"
 
 scr="$scr && setup-base-vm-tools.sh"
 
+if [ "$BASE_IMAGE_OS" == "centos" ]; then
+    scr="$scr && setup-centos-base-vm.sh"
+fi
+
 scr="$scr && echo SUCCESS"
 
 access-vm.sh --vm-name "$VM_NAME" "$scr"

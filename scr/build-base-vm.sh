@@ -69,16 +69,16 @@ esac
 ########################################################################
 ##  Selection
 
-: "${BASE_IMAGE_OS:=Ubuntu}"
+: "${BASE_IMAGE_OS:=ubuntu}"
 
 case "$BASE_IMAGE_OS" in
-  "CentOS"|"centos")
+  "centos")
     : "${IMAGE_URL:=$CENTOS_URL}"
     : "${IMAGE_FILE:=$CENTOS_IMAGE_FILE}"
     : "${IMAGE_NAME:=CentOS-${CENTOS_VERSION}-${CENTOS_BUILD_INDEX}-base}"
     OS_PKG_TOOL="yum"
     ;;
-  "Ubuntu"|"ubuntu")
+  "ubuntu")
     : "${IMAGE_URL:=$UBUNTU_URL}"
     : "${IMAGE_FILE:=$UBUNTU_IMAGE_FILE}"
     : "${IMAGE_NAME:=Ubuntu-${UBUNTU_VERSION}-base}"
