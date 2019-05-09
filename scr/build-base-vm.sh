@@ -41,7 +41,7 @@
 : "${CENTOS_URL:=https://cloud.centos.org/centos/$CENTOS_VERSION/images}"
 
 # Default File Name
-dfname="Centos-$CENTOS_VERSION-$CENTOS_ARCH"
+dfname="CentOS-$CENTOS_VERSION-$CENTOS_ARCH"
 dfname="$dfname-GenericCloud-${CENTOS_BUILD_INDEX}.qcow2"
 
 # CentOS Cloud Image File

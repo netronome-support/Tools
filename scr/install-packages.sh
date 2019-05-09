@@ -93,14 +93,7 @@ fi
 
 function repository_update () {
     case "$OS_PKG_TOOL" in
-      "yum")
-        udtagfile="/var/lib/.yum-update-tag-file.txt"
-        if [ ! -f "$udtagfile" ]; then
-            $OS_PKG_CMD update -y >> $pkgmgrlog 2>&1
-            echo "Created by $0 on $(date)" > $udtagfile
-        fi
-        ;;
-      "apt-get")
+      "apt"|"apt-get")
         if [ "$PKG_UPDATE_MAX_AGE" != "" ]; then
             if test $(find /var/lib/apt -type d -name 'lists' \
                 -mmin +$PKG_UPDATE_MAX_AGE) ; then
@@ -259,22 +252,16 @@ fi
 ########################################################################
 
 if [ "$PKG_LOG_FILE" != "" ]; then
-    $OS_PKG_CMD install -y ${pkglist[@]} \
-        > $PKG_LOG_FILE 2>&1 \
-        || exit -1
+    exec $OS_PKG_CMD install -y ${pkglist[@]} \
+        > $PKG_LOG_FILE 2>&1
 else
-    $OS_PKG_CMD install -y ${pkglist[@]} \
-        || exit -1
+    exec $OS_PKG_CMD install -y ${pkglist[@]}
 fi
 
 ########################################################################
 # The return code from yum is 0 (success) even if it failed to install a
-# package. This is obviously not good. Here's a work-around:
-if [ "$OS_PKG_ARCH" == "rpm" ]; then
-    non_installed_list=$(rpm --query --queryformat "" ${pkglist[@]})
-    if [ "$non_installed_list" != "" ]; then
-        exit -1
-    fi
-fi
+# package. This is obviously not good. There used to be a work-around:
+#    rpm --query --queryformat "" ${pkglist[@]}
+# This does not work anymore. :(
 ########################################################################
 exit 0

@@ -35,6 +35,8 @@ function check_status () {
     fi
 }
 
+set -o pipefail
+
 ########################################################################
 
 which install-packages.sh > /dev/null 2>&1
