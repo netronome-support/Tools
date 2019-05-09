@@ -39,6 +39,32 @@ network: {config: disabled}
 EOF
 
 ########################################################################
+##  Fix SSH access
+
+function set_option () {
+    local opt_name="$1"
+    local opt_value="$2"
+    grep -E "^[# \s]*${opt_name}\s" $sshdfile > /dev/null
+    if [ $? -ne 0 ]; then
+        printf "%s %s\n" "$opt_name" "$opt_value" \
+            >> $sshdfile
+    else
+        sed -r \
+            's/^[#\s]*('$opt_name')\s.*$/\1 '$opt_value'/' \
+            -i "$sshdfile"
+    fi
+}
+
+sshdfile="/etc/ssh/sshd_config"
+test -f $sshdfile
+    check_status "missing $sshdfile"
+
+set_option "UseDNS" "no"
+set_option "GSSAPIAuthentication" "no"
+set_option "PermitRootLogin" "yes"
+set_option "PasswordAuthentication" "yes"
+
+########################################################################
 ##  Packages to install on the VM
 
 pkgs=()
