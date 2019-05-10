@@ -29,6 +29,7 @@ for arg in "$@" ; do
         "--state") param="state" ;;
         "--check-port") param="check-port" ;;
         "--check-ssh") optCheckSSH=yes ;;
+        "--use-sshpass") optUseSshpass=yes ;;
         "--quiet"|"-q") optQuiet=yes ;;
         "--verbose"|"-v") optVerbose=yes ;;
         "--ping-only") optPingOnly=yes ;;
@@ -128,7 +129,14 @@ while [ $keep_trying -ne 0 ] ; do
             fi
         done
         if [ "$optCheckSSH" != "" ]; then
-            ssh ${sshopts[@]} $ipaddr true
+            sshpass=""
+            if [ "$optUseSshpass" != "" ]; then
+                which sshpass > /dev/null 2>&1
+                    check_status "sshpass is not installed"
+                # Specify password via 'SSHPASS'
+                sshpass="sshpass -e"
+            fi
+            $sshpass ssh ${sshopts[@]} $ipaddr true
             if [ $? -ne 0 ]; then
                 verbose "SSH to $ipaddr failed ($vmname)"
                 keep_trying=1

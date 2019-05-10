@@ -12,6 +12,7 @@ function check_status () {
 re_integer='^[0-9]+$'
 re_nfp_repr='^nfp_v[01]\.[0-9]{1,2}$'
 xdig="[0-9abcdefABCDEF]"
+model_type="virtio"
 ########################################
 param=""
 for arg in "$@" ; do
@@ -33,6 +34,7 @@ for arg in "$@" ; do
         echo "  --ovs-br-name <ifname>"
         echo "  --ovs-port-name <ifname>"
         echo "  --guest-pci-slot <index>"
+        echo "  --model-type <interface type>"
         echo "  --xvio-socket <socket file>"
         echo "  --queues <integer>"
         exit
@@ -45,9 +47,11 @@ for arg in "$@" ; do
       "--eth-801q-vid")         param="$arg" ;;
       "--nfp-vf-index")         param="$arg" ;;
       "--nfp-vf-repr")          param="$arg" ;;
+      "--br-name")              param="$arg" ;;
       "--ovs-br-name")          param="$arg" ;;
       "--ovs-port-name")        param="$arg" ;;
       "--guest-pci-slot")       param="$arg" ;;
+      "--model-type")           param="$arg" ;;
       "--xvio-socket")          param="$arg" ;;
       "--queues")               param="$arg" ;;
       *)
@@ -65,9 +69,11 @@ for arg in "$@" ; do
       "--eth-801q-vid")         eth_801q_vid="$arg" ;;
       "--nfp-vf-index")         nfp_vf_index="$arg" ;;
       "--nfp-vf-repr")          nfp_vf_repr_iface="$arg" ;;
+      "--br-name")              br_name="$arg" ;;
       "--ovs-br-name")          ovs_br_name="$arg" ;;
       "--ovs-port-name")        ovs_port_name="$arg" ;;
       "--guest-pci-slot")       guest_pci_slot="$arg" ;;
+      "--model-type")           model_type="$arg" ;;
       "--xvio-socket")          xvio_socket="$arg" ;;
       "--queues")               queues="$arg" ;;
     esac
@@ -127,8 +133,20 @@ vm_state=$(cat $tmpdir/status.info \
 ########################################
 xml=""
 ########################################
+##  Convert 'type' to lowercase
+type=${type,,}
+########################################
 case $type in
-  "xvio"|"XVIO")
+  "xvio"|"hostdev"|"sr-iov") ;;
+  "sriov"|"vf"|"pf")    type="sr-iov" ;;
+  "bridge")             type="bridge" ; br_type="" ;;
+  "ovs"|"ovs-bridge")   type="bridge" ; br_type="ovs" ;;
+  *)
+    false ; check_status "device type (--type) not specified"
+esac
+########################################
+case $type in
+  "xvio")
     devtype="interface"
     devopts="type='vhostuser'"
     test "$xvio_socket" != ""
@@ -145,29 +163,30 @@ case $type in
     require_pci_addr=YES
     pci_dev_driver="vfio-pci"
     ;;
-  "sr-iov"|"SR-IOV")
+  "sr-iov")
     devtype="interface"
     devopts="type='hostdev' managed='yes'"
     require_pci_addr=YES
     pci_dev_driver="vfio-pci"
     ;;
-  "bridge"|"ovs"|"OVS")
-    test "$ovs_br_name" != ""
-        check_status "OVS bridge name required for 'bridge' device"
+  "bridge")
+    if [ "$ovs_br_name" != "" ]; then
+        br_type="ovs"
+        br_name="$ovs_br_name"
+    fi
     devtype="interface"
     devopts="type='bridge'"
-    if [ "$ovs_port_name" == "" ]; then
-        bridx=$(echo "$ovs_br_name" | tr -d '[:alpha:]' | tr -d '-')
-        vmidx=$(echo "$vmname"      | tr -d '[:alpha:]' | tr -d '-')
-        ovs_port_name="port-$bridx-$vmidx"
+    if [ "$br_type" == "ovs" ]; then
+        xml="$xml <virtualport type='openvswitch'/>"
     fi
-    xml="$xml <source bridge='$ovs_br_name'/>"
-    xml="$xml <virtualport type='openvswitch'/>"
-    xml="$xml <target dev='$ovs_port_name'/>"
-    xml="$xml <model type='virtio'/>"
+    test "$br_name" != ""
+        check_status "no bridge name specified"
+    xml="$xml <source bridge='$br_name'/>"
+    if [ "$ovs_port_name" != "" ]; then
+        xml="$xml <target dev='$ovs_port_name'/>"
+    fi
+    xml="$xml <model type='$model_type'/>"
     ;;
-  *)
-    false ; check_status "device type (--type) not specified"
 esac
 ########################################
 if [ "$require_pci_addr" != "" ] && [ "$pci_addr" == "" ]; then
