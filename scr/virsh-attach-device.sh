@@ -31,7 +31,8 @@ for arg in "$@" ; do
         echo "  --eth-801q-vid <integer>"
         echo "  --nfp-vf-index <integer>"
         echo "  --nfp-vf-repr <ifname>"
-        echo "  --ovs-br-name <ifname>"
+        echo "  --br-name <bridge name>"
+        echo "  --ovs-br-name <bridge name>"
         echo "  --ovs-port-name <ifname>"
         echo "  --guest-pci-slot <index>"
         echo "  --model-type <interface type>"
@@ -55,8 +56,8 @@ for arg in "$@" ; do
       "--xvio-socket")          param="$arg" ;;
       "--queues")               param="$arg" ;;
       *)
-        echo "ERROR: Failed to parse '$arg'"
-        echo "Full command line: $@"
+        echo "ERROR($(basename $0)): failed to parse '$arg'"
+        echo "Full command line: $0 $@"
         exit -1
         ;;
     esac

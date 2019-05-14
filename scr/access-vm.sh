@@ -14,10 +14,14 @@ for arg in "$@" ; do
             echo "Access VM(s) via ssh"
             echo "  --help -h"
             echo "  --verbose -v"
-            echo "  --vm-name-filter"
-            echo "  --vm-name"
-            echo "  --user-name"
-            echo "  --ssh-key-file"
+            echo "  --vm-name-filter <filter>"
+            echo "  --vm-name <VM name>"
+            echo "  --user-name <SSH user name>"
+            echo "  --ssh-key-file <file>"
+            echo "  --ssh-password <SSH password>"
+            echo "  --network-type <type>"
+            echo "  --network-name <name>"
+            echo "  --bridge-name <name>"
             exit
             ;;
           "--verbose"|"-v")     optVerbose="yes" ;;
@@ -26,6 +30,7 @@ for arg in "$@" ; do
           "--vm-name")          param="$arg" ;;
           "--user-name")        param="$arg" ;;
           "--ssh-key-file")     param="$arg" ;;
+          "--ssh-password")     param="$arg" ;;
           "--network-type")     param="$arg" ;;
           "--network-name")     param="$arg" ;;
           "--bridge-name")      param="$arg" ;;
@@ -44,6 +49,7 @@ for arg in "$@" ; do
           "--vm-name")          vm_name_list+=( "$arg" ) ;;
           "--user-name")        SSH_USERNAME="$arg" ;;
           "--ssh-key-file")     SSH_PRIVATE_KEY_FILE="$arg" ;;
+          "--ssh-password")     SSH_PASSWORD="$arg" ;;
           "--network-type")     export VIRSH_IFACE_NETWORK_TYPE="$arg" ;;
           "--network-name")     export VIRSH_IFACE_NETWORK_NAME="$arg" ;;
           "--bridge-name")      export VIRSH_IFACE_BRIDGE_NAME="$arg" ;;
@@ -85,6 +91,13 @@ if [ "$SSH_PRIVATE_KEY_FILE" != "" ]; then
 fi
 sshopts+=( "-l" "${SSH_USERNAME-"root"}" )
 sshcmd="ssh ${sshopts[@]}"
+########################################
+if [ "$SSH_PASSWORD" != "" ]; then
+    which sshpass > /dev/null 2>&1
+        check_status "required tool 'sshpass' is missing"
+    sshcmd="sshpass -e $sshcmd"
+    export SSHPASS="$SSH_PASSWORD"
+fi
 ########################################
 ##  Save 'virsh list  --state-running' into a list
 mapfile -t vmlisting < \

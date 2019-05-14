@@ -20,6 +20,7 @@ for arg in "$@" ; do
             echo "  --user-name"
             echo "  --target"
             echo "  --ssh-key-file"
+            echo "  --ssh-password <SSH password>"
             exit
             ;;
           "--verbose"|"-v")     optVerbose="yes"
@@ -30,6 +31,7 @@ for arg in "$@" ; do
           "--target")           param="$arg" ;;
           "-R"|"--relative")    ropts+=( "$arg" ) ;;
           "--ssh-key-file")     param="$arg" ;;
+          "--ssh-password")     param="$arg" ;;
           "--network-type")     param="$arg" ;;
           "--network-name")     param="$arg" ;;
           "--bridge-name")      param="$arg" ;;
@@ -49,6 +51,7 @@ for arg in "$@" ; do
           "--user-name")        SSH_USERNAME="$arg" ;;
           "--target")           RSYNC_TARGET="$arg" ;;
           "--ssh-key-file")     SSH_PRIVATE_KEY_FILE="$arg" ;;
+          "--ssh-password")     SSH_PASSWORD="$arg" ;;
           "--network-type")     export VIRSH_IFACE_NETWORK_TYPE="$arg" ;;
           "--network-name")     export VIRSH_IFACE_NETWORK_NAME="$arg" ;;
           "--bridge-name")      export VIRSH_IFACE_BRIDGE_NAME="$arg" ;;
@@ -90,6 +93,13 @@ if [ "$SSH_PRIVATE_KEY_FILE" != "" ]; then
 fi
 sshopts+=( "-l" "${SSH_USERNAME-"root"}" )
 sshcmd="ssh ${sshopts[@]}"
+########################################
+if [ "$SSH_PASSWORD" != "" ]; then
+    which sshpass > /dev/null 2>&1
+        check_status "required tool 'sshpass' is missing"
+    sshcmd="sshpass -e $sshcmd"
+    export SSHPASS="$SSH_PASSWORD"
+fi
 ########################################
 ropts+=( "--recursive" )
 ropts+=( "--copy-links" )
