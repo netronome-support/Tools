@@ -19,6 +19,7 @@ for arg in "$@" ; do
             echo "  --user-name <SSH user name>"
             echo "  --ssh-key-file <file>"
             echo "  --ssh-password <SSH password>"
+            echo "  --ssh-copy-id"
             echo "  --network-type <type>"
             echo "  --network-name <name>"
             echo "  --bridge-name <name>"
@@ -26,6 +27,7 @@ for arg in "$@" ; do
             ;;
           "--verbose"|"-v")     optVerbose="yes" ;;
           "--tty")              optKeepStdin="yes" ;;
+          "--ssh-copy-id")      optCopyID="yes" ;;
           "--vm-name-filter")   param="$arg" ;;
           "--vm-name")          param="$arg" ;;
           "--user-name")        param="$arg" ;;
@@ -78,8 +80,8 @@ for tool in ${tlist[@]} ; do
         check_status "required tool '$tool' is missing"
 done
 ########################################
+: ${SSH_USERNAME:='root'}
 sshopts+=()
-sshopts+=( "-q" )
 sshopts+=( "-o" "StrictHostKeyChecking=no" )
 sshopts+=( "-o" "UserKnownHostsFile=/dev/null" )
 sshopts+=( "-o" "ConnectionAttempts=300" )
@@ -89,8 +91,11 @@ if [ "$SSH_PRIVATE_KEY_FILE" != "" ]; then
         sshopts+=( "-i" "$SSH_PRIVATE_KEY_FILE" )
     fi
 fi
-sshopts+=( "-l" "${SSH_USERNAME-"root"}" )
-sshcmd="ssh ${sshopts[@]}"
+if [ "$optCopyID" != "" ]; then
+    sshcmd="ssh-copy-id ${sshopts[@]}"
+else
+    sshcmd="ssh -q -l ${SSH_USERNAME} ${sshopts[@]}"
+fi
 ########################################
 if [ "$SSH_PASSWORD" != "" ]; then
     which sshpass > /dev/null 2>&1
@@ -153,25 +158,21 @@ done
 ########################################
 test ${#vm_access_list[@]} -gt 0
     check_status "no valid VM specified"
+########################################
+if [ "$optKeepStdin" == "" ] && [ ${#arglist[@]} -gt 0 ]; then
+    # Disable access to TTY
+    exec < /dev/null
+fi
+########################################
 if [ ${#vm_access_list[@]} -eq 1 ]; then
     vmname=${vm_access_list[0]}
     ipaddr=${vm_ip_addr[$vmname]}
-    if [ "$optKeepStdin" != "" ] || [ ${#arglist[@]} -eq 0 ]; then
-        exec $sshcmd $ipaddr "${arglist[@]}"
-    else
-        exec $sshcmd $ipaddr "${arglist[@]}" < /dev/null
-    fi
+    exec $sshcmd $ipaddr "${arglist[@]}"
 else
     for vmname in ${vm_access_list[@]} ; do
         ipaddr=${vm_ip_addr[$vmname]}
-        if [ "$optKeepStdin" != "" ] || [ ${#arglist[@]} -eq 0 ]; then
-            $sshcmd $ipaddr "${arglist[@]}" \
-                || exit -1
-        else
-            $sshcmd $ipaddr "${arglist[@]}" \
-                < /dev/null \
-                || exit -1
-        fi
+        $sshcmd $ipaddr "${arglist[@]}" \
+            || exit -1
     done
 fi
 ########################################

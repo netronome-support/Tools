@@ -61,6 +61,8 @@ pkgs+=( "git" )
 
 case "$mode" in
   'ubuntu') # Repository Install
+    test "$ID_VERSION" == "18.04"
+        check_status "please use 18.04"
     pkgs+=( "add-apt-repository@ubuntu:software-properties-common" )
     ;;
   'fedora') # Repository Install
