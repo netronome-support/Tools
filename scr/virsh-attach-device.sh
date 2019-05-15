@@ -9,6 +9,8 @@ function check_status () {
     fi
 }
 ########################################
+set -o pipefail
+########################################
 re_integer='^[0-9]+$'
 re_nfp_repr='^nfp_v[01]\.[0-9]{1,2}$'
 xdig="[0-9abcdefABCDEF]"
@@ -64,7 +66,7 @@ for arg in "$@" ; do
   else
     case "$param" in
       "--vm-name")              vmname="$arg" ;;
-      "--type")                 type="$arg" ;;
+      "--type")                 type="${arg,,}" ;; # Lower-Case
       "--hw-addr")              hw_addr="$arg" ;;
       "--pci-addr")             pci_addr="$arg" ;;
       "--eth-801q-vid")         eth_801q_vid="$arg" ;;
@@ -134,9 +136,6 @@ vm_state=$(cat $tmpdir/status.info \
 ########################################
 xml=""
 ########################################
-##  Convert 'type' to lowercase
-type=${type,,}
-########################################
 case $type in
   "xvio"|"hostdev"|"sr-iov") ;;
   "sriov"|"vf"|"pf")    type="sr-iov" ;;
@@ -152,10 +151,24 @@ case $type in
     devopts="type='vhostuser'"
     test "$xvio_socket" != ""
         check_status "XVIO socket not specified"
-    test -S "$xvio_socket"
-        check_status "XVIO socket '$xvio_socket' missing"
+
+    # After a restart of the virtio-forwarder, it may take some time for
+    # the socket file to appear. Thus give it some time:
+    sec_cnt_start=$(date +'%s')
+    sec_cnt_limit=$(( sec_cnt_start + 10 ))
+    while [ ! -S "$xvio_socket" ]; do
+        sleep 0.25
+        sec_cnt_now=$(date +'%s')
+        test $sec_cnt_now -lt $sec_cnt_limit
+            check_status "missing socket file '$xvio_socket'"
+    done
+
     xml="$xml <source type='unix' path='$xvio_socket' mode='client'/>"
     xml="$xml <model type='virtio'/>"
+    # Although XVIO attaches to a socket, the driver on the VF needs
+    # to be set to 'igb_uio'
+    require_pci_addr=YES
+    pci_dev_driver="vfio-pci"
     ;;
   "hostdev")
     devtype="hostdev"
@@ -200,11 +213,6 @@ if [ "$require_pci_addr" != "" ] && [ "$pci_addr" == "" ]; then
     printf -v pci_addr "%s:%02x.%u" "$nfp_pci_bus" \
         $(( 8 + nfp_vf_index / 8 )) \
         $(( nfp_vf_index % 8 ))
-    # Attach the appropriate device driver
-    which set-device-driver.sh > /dev/null 2>&1
-        check_status "missing script 'set-device-driver.sh'"
-    set-device-driver.sh --driver "$pci_dev_driver" "$pci_addr" \
-        || exit -1
 fi
 ########################################
 if [ "$hw_addr" != "" ]; then
@@ -254,6 +262,13 @@ if [ "$pci_addr" != "" ]; then
         exit -1
     fi
 
+    if [ "$pci_dev_driver" != "" ]; then
+        which set-device-driver.sh > /dev/null 2>&1
+            check_status "missing script 'set-device-driver.sh'"
+        set-device-driver.sh --driver "$pci_dev_driver" "$pci_addr" \
+            || exit -1
+    fi
+
     printf -v addr \
         "domain='0x%04x' bus='0x%02x' slot='0x%02x' function='%x'" \
         0x$(echo $bdf_sp | cut -d ' ' -f 1) \
@@ -261,6 +276,18 @@ if [ "$pci_addr" != "" ]; then
         0x$(echo $bdf_sp | cut -d ' ' -f 3) \
         0x$(echo $bdf_sp | cut -d ' ' -f 4)
     xml="$xml <source><address type='pci' $addr /></source>"
+fi
+########################################
+: ${VIOFWD_TOOL_DIR:=/usr/lib/virtio-forwarder}
+: ${VIOFWD_PORT_CTRL:=$VIOFWD_TOOL_DIR/virtioforwarder_port_control.py}
+
+if [ "$type" == "xvio" ]; then
+    test -x "$VIOFWD_PORT_CTRL"
+        check_status "virtio-forwarder port control tool missing"
+
+    $VIOFWD_PORT_CTRL add \
+        --pci-addr "$pci_addr" --virtio-id "$nfp_vf_index"
+        check_status "faild to attach VIOFWD port"
 fi
 ########################################
 xml="<$devtype $devopts> $xml </$devtype>"
