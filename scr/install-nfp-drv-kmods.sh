@@ -47,6 +47,17 @@ which install-packages.sh > /dev/null 2>&1
 #   sudo ./Tools/install.sh
 
 ########################################################################
+kern_cfg_file="/boot/config-$(uname -r)"
+kern_cfg_name="CONFIG_NET_SWITCHDEV"
+test -f $kern_cfg_file
+    check_status "missing kernel config file ($kern_cfg_file)"
+kern_net_sd_line=$(grep -E "^$kern_cfg_name" $kern_cfg_file)
+test "$kern_net_sd_line" != ""
+    check_status "kernel is missing $kern_cfg_name setting"
+test "$kern_net_sd_line" == "$kern_cfg_name=y"
+    check_status "CONFIG_NET_SWITCHDEV is not enabled in kernel"
+
+########################################################################
 
 pkgs=()
 pkgs+=( "git@" "make@" "gcc@" )

@@ -87,7 +87,8 @@ for ifname in $list ; do
         | sed -rn 's/^.*driver:\s*(\S+)@.*$/\1/p')
     businfo=$(echo $info \
         | sed -rn 's/^.*@bus-info: ([^@]*)@.*$/\1/p')
-    s_ifname=""
+    s_ifname="a-other"
+    ppfile="/sys/class/net/$ifname/phys_port_name"
     type="" ; addr=""
     if [ "$opt_driver" != "" ] && [ "$opt_driver" != "$driver" ]; then
         continue
@@ -101,39 +102,36 @@ for ifname in $list ; do
         printf -v s_ifname "d-vf-%02u" $idx
         type="VF-R"
         printf -v addr "%s" "$pciaddr"
-    elif [[ "$businfo" =~ $re_pciaddr ]]; then
+    elif [ -f $ppfile ]; then
+        phys_port=$(cat $ppfile 2> /dev/null)
+        re_p='^p[0-9]+$'
+        re_pf='^pf[0-9]+$'
+        re_vf='^pf[0-9]+vf[0-9]+$'
+        if [[ "$phys_port" =~ $re_p ]]; then
+            index=${phys_port#p}
+            printf -v s_ifname "b-p-%02u" $idx
+            type="P"
+        elif [[ "$phys_port" =~ $re_pf ]]; then
+            index=${phys_port#pf}
+            printf -v s_ifname "c-pf-%02u" $idx
+            type="PF"
+        elif [[ "$phys_port" =~ $re_vf ]]; then
+            index=${phys_port#*vf}
+            printf -v s_ifname "d-vf-%02u" $idx
+            type="VF-R"
+        elif [ "$phys_port" == "" ]; then
+            re_nfp_p_ifname='^nfp_p[0-9]$'
+            if [[ "$ifname" =~ $re_nfp_p_ifname ]]; then
+                index=${ifname#nfp_p}
+                printf -v s_ifname "b-p-%02u" $idx
+                type="P"
+            fi
+        fi
+    fi
+    if [ "$type" == "" ] && [[ "$businfo" =~ $re_pciaddr ]]; then
         printf -v s_ifname "e-pci-%s" $businfo
         type="PCI"
         addr="$businfo"
-    else
-        s_ifname="a-other"
-        ppfile="/sys/class/net/$ifname/phys_port_name"
-        if [ -f $ppfile ]; then
-            phys_port=$(cat $ppfile 2> /dev/null)
-            re_p='^p[0-9]+$'
-            re_pf='^pf[0-9]+$'
-            re_vf='^pf[0-9]+vf[0-9]+$'
-            if [[ "$phys_port" =~ $re_p ]]; then
-                index=${phys_port#p}
-                printf -v s_ifname "b-p-%02u" $idx
-                type="P"
-            elif [[ "$phys_port" =~ $re_pf ]]; then
-                index=${phys_port#pf}
-                printf -v s_ifname "c-pf-%02u" $idx
-                type="PF"
-            elif [[ "$phys_port" =~ $re_vf ]]; then
-                index=${phys_port#*vf}
-                printf -v s_ifname "d-vf-%02u" $idx
-                type="VF-R"
-            elif [ "$phys_port" == "" ]; then
-                re_nfp_p_ifname='^nfp_p[0-9]$'
-                if [[ "$ifname" =~ $re_nfp_p_ifname ]]; then
-                    index=${ifname#nfp_p}
-                    printf -v s_ifname "b-p-%02u" $idx
-                    type="P"
-                fi
-            fi
-        fi
     fi
     if [ "$opt_type" != "" ] && [ "$opt_type" != "$type" ]; then
         continue
