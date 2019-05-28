@@ -38,7 +38,7 @@ for arg in "$@" ; do
         echo "  --ovs-port-name <ifname>"
         echo "  --guest-pci-slot <index>"
         echo "  --model-type <interface type>"
-        echo "  --xvio-socket <socket file>"
+        echo "  --socket <socket file>"
         echo "  --queues <integer>"
         exit
         ;;
@@ -55,7 +55,8 @@ for arg in "$@" ; do
       "--ovs-port-name")        param="$arg" ;;
       "--guest-pci-slot")       param="$arg" ;;
       "--model-type")           param="$arg" ;;
-      "--xvio-socket")          param="$arg" ;;
+      "--xvio-socket")          param="--socket" ;;
+      "--socket")               param="$arg" ;;
       "--queues")               param="$arg" ;;
       *)
         echo "ERROR($(basename $0)): failed to parse '$arg'"
@@ -77,7 +78,7 @@ for arg in "$@" ; do
       "--ovs-port-name")        ovs_port_name="$arg" ;;
       "--guest-pci-slot")       guest_pci_slot="$arg" ;;
       "--model-type")           model_type="$arg" ;;
-      "--xvio-socket")          xvio_socket="$arg" ;;
+      "--socket")               socket_fname="$arg" ;;
       "--queues")               queues="$arg" ;;
     esac
     param=""
@@ -116,7 +117,7 @@ if [ "$nfp_vf_repr_iface" != "" ]; then
         | sed -rn 's/nfp_v[01]\.([0-9]+)$/\1/p')
 fi
 ########################################
-if [ "$xvio_socket" == "" ] && [ "$nfp_vf_index" != "" ]; then
+if [ "$socket_fname" == "" ] && [ "$nfp_vf_index" != "" ]; then
     VIRTIOFWD_SOCKET_DIR="/tmp/virtio-forwarder"
     if [ -f /etc/default/virtioforwarder ]; then
         dirname=$(cat /etc/default/virtioforwarder \
@@ -126,7 +127,7 @@ if [ "$xvio_socket" == "" ] && [ "$nfp_vf_index" != "" ]; then
             VIRTIOFWD_SOCKET_DIR="$dirname"
         fi
     fi
-    xvio_socket="$VIRTIOFWD_SOCKET_DIR/virtio-forwarder$nfp_vf_index.sock"
+    socket_fname="$VIRTIOFWD_SOCKET_DIR/virtio-forwarder$nfp_vf_index.sock"
 fi
 ########################################
 virsh dominfo "$vmname" > $tmpdir/status.info 2>&1
@@ -137,7 +138,7 @@ vm_state=$(cat $tmpdir/status.info \
 xml=""
 ########################################
 case $type in
-  "xvio"|"hostdev"|"sr-iov") ;;
+  "xvio"|"hostdev"|"sr-iov"|"vhostuser") ;;
   "sriov"|"vf"|"pf")    type="sr-iov" ;;
   "bridge")             type="bridge" ; br_type="" ;;
   "ovs"|"ovs-bridge")   type="bridge" ; br_type="ovs" ;;
@@ -149,26 +150,33 @@ case $type in
   "xvio")
     devtype="interface"
     devopts="type='vhostuser'"
-    test "$xvio_socket" != ""
+    test "$socket_fname" != ""
         check_status "XVIO socket not specified"
 
     # After a restart of the virtio-forwarder, it may take some time for
     # the socket file to appear. Thus give it some time:
     sec_cnt_start=$(date +'%s')
     sec_cnt_limit=$(( sec_cnt_start + 10 ))
-    while [ ! -S "$xvio_socket" ]; do
+    while [ ! -S "$socket_fname" ]; do
         sleep 0.25
         sec_cnt_now=$(date +'%s')
         test $sec_cnt_now -lt $sec_cnt_limit
-            check_status "missing socket file '$xvio_socket'"
+            check_status "missing socket file '$socket_fname'"
     done
 
-    xml="$xml <source type='unix' path='$xvio_socket' mode='client'/>"
+    xml="$xml <source type='unix' path='$socket_fname' mode='client'/>"
     xml="$xml <model type='virtio'/>"
     # Although XVIO attaches to a socket, the driver on the VF needs
     # to be set to 'igb_uio'
     require_pci_addr=YES
     pci_dev_driver="vfio-pci"
+    ;;
+  "vhostuser")
+    devtype="interface"
+    devopts="type='vhostuser'"
+    require_socket_fname=YES
+    xml="$xml <source type='unix' path='$socket_fname' mode='client'/>"
+    xml="$xml <model type='virtio'/>"
     ;;
   "hostdev")
     devtype="hostdev"
@@ -213,6 +221,15 @@ if [ "$require_pci_addr" != "" ] && [ "$pci_addr" == "" ]; then
     printf -v pci_addr "%s:%02x.%u" "$nfp_pci_bus" \
         $(( 8 + nfp_vf_index / 8 )) \
         $(( nfp_vf_index % 8 ))
+fi
+########################################
+if [ "$require_socket_fname" != "" ]; then
+    test "$socket_fname" != ""
+        check_status "socket file must be specified"
+    test -S "$socket_fname"
+        check_status "not a socket file ($socket_fname)"
+    chmod a+rwx $socket_fname
+        check_status "failed to change permissions on $socket_fname"
 fi
 ########################################
 if [ "$hw_addr" != "" ]; then
