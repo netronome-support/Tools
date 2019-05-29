@@ -2,8 +2,8 @@
 
 ########################################################################
 
-: "${VM_BUILD_DPDK_VERSION:=19.02}"
-: "${VM_BUILD_DPDK_PKTGEN_VERSION:=3.5.0}"
+: ${VM_BUILD_DPDK_VERSION_LIST:="18.05 19.02"}
+: ${VM_BUILD_DPDK_PKTGEN_VERSION:="3.5.0"}
 
 ########################################################################
 
@@ -91,14 +91,17 @@ install-packages.sh --update ${pkgs[@]}
     check_status
 
 ########################################################################
+
 systemctl is-enabled ntp > /dev/null 2>&1 \
     && systemctl disable ntp
 
 install-nfp-drv-kmods.sh
     check_status
 
-install-dpdk.sh $VM_BUILD_DPDK_VERSION
-    check_status
+for version in $VM_BUILD_DPDK_VERSION_LIST ; do
+    install-dpdk.sh $version
+        check_status
+done
 
 ########################################################################
 

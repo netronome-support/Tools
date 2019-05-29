@@ -217,7 +217,7 @@ make -C $proxdir install \
 
 execfile="$RTE_OUTPUT/prox"
 
-cp $execfile /usr/local/bin
+cp --remove-destination $execfile /usr/local/bin
     check_status "failed to copy prox binary to /usr/local/bin"
 
 cat <<EOF > $conffile

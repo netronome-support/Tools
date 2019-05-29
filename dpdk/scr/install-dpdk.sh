@@ -454,7 +454,7 @@ fi
 
 ########################################
 
-cp -f $conffile $DPDK_SETTINGS_DIR/$pkgname.conf
+cp -f --remove-destination $conffile $DPDK_SETTINGS_DIR/$pkgname.conf
 
 if [ "$DPDK_SETTINGS_DIR" != "/etc" ]; then
     $SUDO cp -f $conffile /etc

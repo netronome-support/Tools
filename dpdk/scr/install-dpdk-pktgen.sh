@@ -293,7 +293,10 @@ execfile=$(find $pkgdir/app -name 'pktgen' -executable \
 test "$execfile" != ""
     check_status "failed to find pktgen executable"
 
-cat <<EOF > $conffile
+########################################
+
+new_conf_file=$(mktemp /tmp/.new-dpdk-pktgen-XXXXX.conf)
+cat <<EOF > $new_conf_file
 # Generated on $(date) by $0
 export DPDK_PKTGEN_VERSION="$version"
 export DPDK_VERSION="$DPDK_VERSION"
@@ -306,11 +309,15 @@ EOF
 
 ########################################
 
-cp -f $conffile $DPDK_SETTINGS_DIR/$pkgname.conf
+if [ "$DPDK_SETTINGS_DIR" != "/etc" ]; then
+    cp -f $new_conf_file $DPDK_SETTINGS_DIR/$pkgname.conf
+    cp -f $new_conf_file $DPDK_SETTINGS_DIR/$pkgname-$DPDK_VERSION-$version.conf
+fi
 
-$SUDO cp -f $conffile /etc
-$SUDO cp -f $conffile /etc/$pkgname.conf
+$SUDO cp -f $new_conf_file /etc/$pkgname-$DPDK_VERSION-$version.conf
+$SUDO cp -f $new_conf_file /etc/$pkgname.conf
 
+rm -f $new_conf_file
 ########################################
 
 exit 0

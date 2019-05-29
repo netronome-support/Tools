@@ -75,7 +75,7 @@ test -d $rtdir
 make -C $rtdir
     check_status "failed to 'make' route source code"
 
-$SUDO cp $rtdir/build/route /usr/local/bin/dpdk-route
+$SUDO cp --remove-destination $rtdir/build/route /usr/local/bin/dpdk-route
 
 ########################################
 
