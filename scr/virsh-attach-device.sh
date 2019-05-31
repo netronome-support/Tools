@@ -250,7 +250,7 @@ fi
 if [ "$queues" != "" ]; then
     [[ "$queues" =~ $re_integer ]]
         check_status "could not parse '--queues $queues'"
-    test $queues -lt 1
+    test $queues -ge 1
         check_status "number of queues must be at least '1'"
     if [ $queues -gt 1 ]; then
         xml="$xml <driver name='vhost' queues='$queues'/>"
