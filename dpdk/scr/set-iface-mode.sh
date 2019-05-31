@@ -26,8 +26,8 @@ mode=$2
 ########################################################################
 
 function check_status () {
-    rc="$?" ; errmsg="$1"
-    if [ "$rc" != "0" ]; then
+    rc=$? ; errmsg="$1"
+    if [ $rc -ne 0 ]; then
         if [ "$errmsg" != "" ]; then
             echo "ERROR($(basename $0)): $errmsg" >&2
         fi
@@ -48,14 +48,16 @@ install-packages.sh ${pkgs[@]} \
 ########################################################################
 ##  Get list of 'Ethernet controller' PCI devices
 
+hostname="$(hostname)"
+
 bdflist=( $( lspci \
     | sed -rn 's/^(\S+)\s+Ethernet controller.*$/\1/p' \
     ) )
 
-bdf=${bdflist[$ifidx]}
+bdf="${bdflist[$ifidx]}"
 
 test "$bdf" != ""
-    check_status "no such device (ifidx=$ifidx) on $(hostname)"
+    check_status "no such device (ifidx=$ifidx) on $hostname"
 
 ########################################################################
 ##  Based on PCI Bus-Device-Function - value, search for a corresponding
