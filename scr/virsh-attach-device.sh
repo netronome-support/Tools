@@ -12,7 +12,6 @@ function check_status () {
 set -o pipefail
 ########################################
 re_integer='^[0-9]+$'
-re_nfp_repr='^nfp_v[01]\.[0-9]{1,2}$'
 xdig="[0-9abcdefABCDEF]"
 model_type="virtio"
 ########################################
@@ -36,6 +35,7 @@ for arg in "$@" ; do
         echo "  --br-name <bridge name>"
         echo "  --ovs-br-name <bridge name>"
         echo "  --ovs-port-name <ifname>"
+        echo "  --target-dev-name <target device name>"
         echo "  --guest-pci-slot <index>"
         echo "  --model-type <interface type>"
         echo "  --socket <socket file>"
@@ -53,6 +53,7 @@ for arg in "$@" ; do
       "--br-name")              param="$arg" ;;
       "--ovs-br-name")          param="$arg" ;;
       "--ovs-port-name")        param="$arg" ;;
+      "--target-dev-name")      param="$arg" ;;
       "--guest-pci-slot")       param="$arg" ;;
       "--model-type")           param="$arg" ;;
       "--xvio-socket")          param="--socket" ;;
@@ -76,6 +77,7 @@ for arg in "$@" ; do
       "--br-name")              br_name="$arg" ;;
       "--ovs-br-name")          ovs_br_name="$arg" ;;
       "--ovs-port-name")        ovs_port_name="$arg" ;;
+      "--target-dev-name")      target_dev_name="$arg" ;;
       "--guest-pci-slot")       guest_pci_slot="$arg" ;;
       "--model-type")           model_type="$arg" ;;
       "--socket")               socket_fname="$arg" ;;
@@ -138,7 +140,7 @@ vm_state=$(cat $tmpdir/status.info \
 xml=""
 ########################################
 case $type in
-  "xvio"|"hostdev"|"sr-iov"|"vhostuser") ;;
+  "xvio"|"hostdev"|"sr-iov"|"vhostuser"|"direct") ;;
   "sriov"|"vf"|"pf")    type="sr-iov" ;;
   "bridge")             type="bridge" ; br_type="" ;;
   "ovs"|"ovs-bridge")   type="bridge" ; br_type="ovs" ;;
@@ -176,7 +178,7 @@ case $type in
     devopts="type='vhostuser'"
     require_socket_fname=YES
     xml="$xml <source type='unix' path='$socket_fname' mode='client'/>"
-    xml="$xml <model type='virtio'/>"
+    xml="$xml <model type='$model_type'/>"
     ;;
   "hostdev")
     devtype="hostdev"
@@ -190,6 +192,17 @@ case $type in
     devopts="type='hostdev' managed='yes'"
     require_pci_addr=YES
     pci_dev_driver="vfio-pci"
+    ;;
+  "direct")
+    devtype="interface"
+    devopts="type='direct'"
+    xml="$xml <source dev='$br_name' mode='bridge'/>"
+    if [ "$" != "$target_dev_name" ]; then
+        xml="$xml <target dev='$target_dev_name'/>"
+    fi
+    xml="$xml <model type='$model_type'/>"
+    test "$br_name" != ""
+        check_status "please specify bridge name"
     ;;
   "bridge")
     if [ "$ovs_br_name" != "" ]; then
