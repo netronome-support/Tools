@@ -197,7 +197,7 @@ case $type in
     devtype="interface"
     devopts="type='direct'"
     xml="$xml <source dev='$br_name' mode='bridge'/>"
-    if [ "$" != "$target_dev_name" ]; then
+    if [ "$target_dev_name" != "" ]; then
         xml="$xml <target dev='$target_dev_name'/>"
     fi
     xml="$xml <model type='$model_type'/>"
