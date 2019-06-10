@@ -61,7 +61,7 @@ pkgs+=( "git" )
 
 case "$mode" in
   'ubuntu') # Repository Install
-    test "$ID_VERSION" == "18.04"
+    test "$VERSION_ID" == "18.04"
         check_status "please use 18.04"
     pkgs+=( "add-apt-repository@ubuntu:software-properties-common" )
     ;;
@@ -73,6 +73,10 @@ case "$mode" in
     sphinx_file="/usr/lib/python2.7/dist-packages/sphinx/__main__.py"
     pkgs+=( "$sphinx_file@ubuntu:python-sphinx" )
     pkgs+=( "/usr/share/doc/python-zmq@python-zmq" )
+    pkgs+=( "protoc@protobuf-compiler" )
+    pkgs+=( "protoc-c@protobuf-c-compiler" )
+    pkgs+=( "/usr/share/doc/libprotobuf-c-dev/copyright@libprotobuf-c-$DEVEL" )
+    pkgs+=( "/usr/include/zmq.h@libzmq3-$DEVEL" )
     ;;
   *)
     false ; check_status "unsupported system"
