@@ -14,6 +14,7 @@ set -o pipefail
 re_integer='^[0-9]+$'
 xdig="[0-9abcdefABCDEF]"
 model_type="virtio"
+source_mode="client"
 ########################################
 param=""
 for arg in "$@" ; do
@@ -38,6 +39,7 @@ for arg in "$@" ; do
         echo "  --target-dev-name <target device name>"
         echo "  --guest-pci-slot <index>"
         echo "  --model-type <interface type>"
+        echo "  --source-mode server|client"
         echo "  --socket <socket file>"
         echo "  --queues <integer>"
         exit
@@ -56,6 +58,7 @@ for arg in "$@" ; do
       "--target-dev-name")      param="$arg" ;;
       "--guest-pci-slot")       param="$arg" ;;
       "--model-type")           param="$arg" ;;
+      "--source-mode")          param="$arg" ;;
       "--xvio-socket")          param="--socket" ;;
       "--socket")               param="$arg" ;;
       "--queues")               param="$arg" ;;
@@ -80,6 +83,7 @@ for arg in "$@" ; do
       "--target-dev-name")      target_dev_name="$arg" ;;
       "--guest-pci-slot")       guest_pci_slot="$arg" ;;
       "--model-type")           model_type="$arg" ;;
+      "--source-mode")          source_mode="$arg" ;;
       "--socket")               socket_fname="$arg" ;;
       "--queues")               queues="$arg" ;;
     esac
@@ -166,7 +170,7 @@ case $type in
             check_status "missing socket file '$socket_fname'"
     done
 
-    xml="$xml <source type='unix' path='$socket_fname' mode='client'/>"
+    xml="$xml <source type='unix' path='$socket_fname' mode='$source_mode'/>"
     xml="$xml <model type='virtio'/>"
     # Although XVIO attaches to a socket, the driver on the VF needs
     # to be set to 'igb_uio'
@@ -177,7 +181,7 @@ case $type in
     devtype="interface"
     devopts="type='vhostuser'"
     require_socket_fname=YES
-    xml="$xml <source type='unix' path='$socket_fname' mode='client'/>"
+    xml="$xml <source type='unix' path='$socket_fname' mode='$source_mode'/>"
     xml="$xml <model type='$model_type'/>"
     ;;
   "hostdev")
