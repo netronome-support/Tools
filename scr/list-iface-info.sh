@@ -99,7 +99,7 @@ for ifname in $list ; do
         pciaddr=$(echo $businfo \
             | sed -rn 's/^.*\s(\S+)$/\1/p')
 
-        printf -v s_ifname "d-vf-%02u" $idx
+        printf -v s_ifname "d-vf-%02u" $index
         type="VF-R"
         printf -v addr "%s" "$pciaddr"
     elif [ -f $ppfile ]; then
@@ -109,21 +109,21 @@ for ifname in $list ; do
         re_vf='^pf[0-9]+vf[0-9]+$'
         if [[ "$phys_port" =~ $re_p ]]; then
             index=${phys_port#p}
-            printf -v s_ifname "b-p-%02u" $idx
+            printf -v s_ifname "b-p-%02u" $index
             type="P"
         elif [[ "$phys_port" =~ $re_pf ]]; then
             index=${phys_port#pf}
-            printf -v s_ifname "c-pf-%02u" $idx
+            printf -v s_ifname "c-pf-%02u" $index
             type="PF"
         elif [[ "$phys_port" =~ $re_vf ]]; then
             index=${phys_port#*vf}
-            printf -v s_ifname "d-vf-%02u" $idx
+            printf -v s_ifname "d-vf-%02u" $index
             type="VF-R"
         elif [ "$phys_port" == "" ]; then
             re_nfp_p_ifname='^nfp_p[0-9]$'
             if [[ "$ifname" =~ $re_nfp_p_ifname ]]; then
                 index=${ifname#nfp_p}
-                printf -v s_ifname "b-p-%02u" $idx
+                printf -v s_ifname "b-p-%02u" $index
                 type="P"
             fi
         fi

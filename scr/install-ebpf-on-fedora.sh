@@ -79,6 +79,9 @@ function check_version () {
         local r_idx=$(echo $r_vers | sed -r 's/^'"$fmt"'$/'"\\$idx/")
         test "$c_idx" != ""
             check_status "could not parse version number $c_vers"
+        if [ $c_idx -gt $r_idx ]; then
+            return 0
+        fi
         if [ $c_idx -lt $r_idx ]; then
             return 1
         fi
