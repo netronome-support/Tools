@@ -198,6 +198,7 @@ test -f /etc/os-release
 
 pkgs=()
 pkgs+=( "wget@" )
+pkgs+=( "gawk@" )
 pkgs+=( "ssh-keygen@openssh-client" )
 pkgs+=( "cloud-localds@ubuntu:cloud-image-utils,rhel:cloud-utils" )
 pkgs+=( "genisoimage@rhel:genisoimage" )
@@ -281,7 +282,9 @@ if [ "$SSH_PUB_KEY_STR" == "none" ]; then
 elif [ "$SSH_PUB_KEY_STR" == "" ]; then
     if [ ! -f "$SSH_PUB_KEY_FILE" ]; then
         echo " - Create SSH Key"
-        run ssh-keygen -t rsa -f $SSH_PUB_KEY_FILE -q -P ""
+        run ssh-keygen -t rsa -f ${SSH_PUB_KEY_FILE/.pub} -q -P ""
+        test -f ${SSH_PUB_KEY_FILE}
+            check_status "SSH public key file ($SSH_PUB_KEY_FILE) was not created"
     fi
     SSH_PUB_KEY_STR=$(cat $SSH_PUB_KEY_FILE)
 fi        
