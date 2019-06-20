@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ############################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+############################################################
 ##  Allow for local variable overrides
 if [ -d $HOME/.config/netronome ]; then
     for fname in $(find $HOME/.config/netronome -name '*.sh') ; do

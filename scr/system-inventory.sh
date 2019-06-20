@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################
 # Optional Items:
 # SYS_INV_CAPTURE_ETHTOOL_DUMPS=yes
 ########################################################

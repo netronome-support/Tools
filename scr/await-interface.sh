@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ############################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+############################################################
 : ${AWAIT_IF_MAX_TIME:=20}
 ############################################################
 function check_status () {

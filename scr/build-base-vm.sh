@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 
 # Location for downloading files (while actively downloading)
 : "${DOWNLOAD_CACHE_DIR:=/var/cache/download/pending}"

@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 ##  Variable Defaults:
 
 VM_NAME="$BUILD_VM_NAME"

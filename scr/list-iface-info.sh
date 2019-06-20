@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 ##  Install 'ethtool' if it is missing
 
 install-packages.sh "ethtool@" \

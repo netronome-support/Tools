@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 
 : ${VM_BUILD_DPDK_VERSION_LIST:="18.05 19.02"}
 : ${VM_BUILD_DPDK_PKTGEN_VERSION:="3.5.0"}

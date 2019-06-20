@@ -3,6 +3,9 @@
 vmname="$1"
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 #
 #  Extract IPv4 address from a network interface of a VM.
 #  This is based on the DHCP lease database of libvirt.

@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################
 
 enable-netronome-repository.sh \
     || exit -1

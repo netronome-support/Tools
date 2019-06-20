@@ -1,5 +1,10 @@
 #!/bin/bash
 
+########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
+
 args=""
 
 args="$args --long --norm --list-drop --pktsize"
@@ -28,7 +33,6 @@ args="$args "$(cat /proc/net/dev \
 args="$args "$(cat /proc/net/dev \
   | sed -rn 's/^\s*(nfp_v.*):.*$/\1/p' \
   | sort -V)
-
 
 args="$args --total"
 

@@ -1,10 +1,13 @@
 #!/bin/bash
 
+########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 : ${GIT_REPO_BASE_DIR:=/opt/git}
 : ${GITHUB_REPO_PATH:="netronome-support/Tools"}
 : ${GIT_NS_TOOLS_REPO_DIR:="$GIT_REPO_BASE_DIR/netronome-support/Tools"}
 : ${GIT_URL:="https://github.com/$GITHUB_REPO_PATH"}
-
 ########################################################################
 tmpdir=$(mktemp --directory)
 ########################################################################

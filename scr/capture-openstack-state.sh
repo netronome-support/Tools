@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 capfile="$HOME/openstack-capture-$(date +'%Y-%m-%d-%H%M').txt"
 ########################################################################
 set -o pipefail

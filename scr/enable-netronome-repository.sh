@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################
 
 : "${NS_KEY_CACHE:=/var/cache/download/netronome/keys}"
 

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+########################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################
 args=()
 args+=( "--count" ) # Show Packet Counters
 #args+=( "--norm" ) # Show Normalized Rates
@@ -8,7 +12,6 @@ args+=( "--pktsize" ) # Show Average Packet Size (APS)
 args+=( "--reset" )
 args+=( "--ignore-zero" )
 args+=( "-i" "1" ) # Sample Interval
-
 ########################################################
 nfp_if_list=()
 ########################################################
@@ -28,7 +31,6 @@ nfp_if_list+=( $(cat /proc/net/dev \
     | sed -rn 's/^\s*(sdn_p[0-9]+):.*$/\1/p' \
     | sort) )
 ########################################################
-
 if [ ${#nfp_if_list[@]} -gt 0 ]; then
     args+=( "--total-start" )
     args+=( ${nfp_if_list[@]} )

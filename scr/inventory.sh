@@ -1,6 +1,9 @@
 #!/bin/bash
 
 ########################################################################
+# This script is maintained at:
+#   https://github.com/netronome-support/Tools
+########################################################################
 if [ "$INV_PRINT_MODE" == "CSV" ]; then
     # Useful for including the output into a Spreadsheet
     function show () {
