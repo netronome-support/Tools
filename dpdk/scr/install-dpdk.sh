@@ -305,7 +305,12 @@ ss="${ss}s/^(CONFIG_RTE_KNI_KMOD).*$/\1=n/;"
 ss="${ss}s/^(CONFIG_RTE_LIBRTE_KNI).*$/\1=n/;"
 ss="${ss}s/^(CONFIG_RTE_LIBRTE_PMD_KNI).*$/\1=n/;"
 
-sed -r "$ss" -i $RTE_SDK/config/common_linuxapp
+for fname in common_linuxapp common_base common_linux ; do
+    cfgfile="$RTE_SDK/config/$fname"
+    if [ -f $fname ]; then
+        sed -r "$ss" -i $cfgfile
+    fi
+done
 
 ########################################
 ##  Some bug fix
@@ -360,8 +365,10 @@ cfglist+=( "build/.config" )
 cfglist+=( "config/common_linuxapp" )
 cfglist+=( "config/common_base" )
 for cfgfile in ${cfglist[@]} ; do
-    sed -r "$ss" -i $RTE_SDK/$cfgfile
-        check_status "failed to access $RTE_SDK/$cfgfile"
+    if [ -f $RTE_SDK/$cfgfile ]; then
+        sed -r "$ss" -i $RTE_SDK/$cfgfile
+            check_status "failed to access $RTE_SDK/$cfgfile"
+    fi
 done
 
 ########################################

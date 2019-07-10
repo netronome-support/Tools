@@ -47,8 +47,11 @@ EOT
 }
 
 ########################################################################
-# Default Debian Package Cache to Max Age of 10 hours
-: "${PKG_UPDATE_MAX_AGE:=600}"
+# Set Default Debian Package Cache to Max Age of 10 hours
+: ${PKG_UPDATE_MAX_AGE:=600}
+########################################################################
+: ${DEBIAN_FRONTEND:=noninteractive}
+export DEBIAN_FRONTEND
 ########################################################################
 if which apt > /dev/null 2>&1 ; then
     OS_PKG_ARCH="deb"

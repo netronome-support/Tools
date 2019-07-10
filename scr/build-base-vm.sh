@@ -98,8 +98,11 @@ esac
 : "${RESULT_CLOUD_IMAGE_FILE:=${BASE_IMAGES_DIR}/${IMAGE_CLOUD_FILE_NAME}}"
 
 ########################################################################
-# SSH Authorization Key File
-: "${SSH_PUB_KEY_FILE:=$HOME/.ssh/id_rsa.pub}"
+# Standard SSH Key File
+: "${SSH_KEY_FILE:=$HOME/.ssh/id_rsa}"
+
+# Extra VM Access Key File
+: "${SSH_VM_ACCESS_KEY_FILE:=$HOME/.ssh/vm-access-key}"
 
 # VM Root User Password
 : "${VM_ROOT_PASSWORD:=password}"
@@ -277,16 +280,44 @@ printf " - Using base image:\n   %s\n" "$BASE_IMAGE_FILE" \
 ########################################################################
 ##  SSH - For VM authentication, we need a key
 
-if [ "$SSH_PUB_KEY_STR" == "none" ]; then
-    SSH_PUB_KEY_STR=""
-elif [ "$SSH_PUB_KEY_STR" == "" ]; then
-    if [ ! -f "$SSH_PUB_KEY_FILE" ]; then
-        echo " - Create SSH Key"
-        run ssh-keygen -t rsa -f ${SSH_PUB_KEY_FILE/.pub} -q -P ""
-        test -f ${SSH_PUB_KEY_FILE}
-            check_status "SSH public key file ($SSH_PUB_KEY_FILE) was not created"
+pub_ssh_key_list=()
+
+if [ "$SSH_PUB_KEY_STR" != "none" ]; then
+
+    # One public key may be passed via a variable
+    if [ "$SSH_PUB_KEY_STR" != "" ]; then
+        pub_ssh_key_list+=( "$SSH_PUB_KEY_STR" )
     fi
-    SSH_PUB_KEY_STR=$(cat $SSH_PUB_KEY_FILE)
+
+    if [ "$SSH_KEY_FILE" != "none" ]; then
+        if [ ! -f $SSH_KEY_FILE ]; then
+            run ssh-keygen -t rsa -f "$SSH_KEY_FILE" -q -P ""
+        fi
+        pubfile="${SSH_KEY_FILE}.pub"
+        test -f $pubfile
+            check_status "missing the public key file $pubfile"
+        pub_ssh_key_list+=( "$(cat $pubfile)" )
+    fi
+
+    # Besides the host's SSH key, we create an extra key that can
+    # be shared with multiple hosts for VM access.
+    if [ "$SSH_VM_ACCESS_KEY_FILE" != "none" ]; then
+        if [ ! -f $SSH_VM_ACCESS_KEY_FILE ]; then
+            run ssh-keygen -t rsa -f "$SSH_VM_ACCESS_KEY_FILE" \
+                -q -P "" -C "vm-access-key"
+        fi
+        pubfile="${SSH_VM_ACCESS_KEY_FILE}.pub"
+        test -f $pubfile
+            check_status "missing the public key file $pubfile"
+        pub_ssh_key_list+=( "$(cat $pubfile)" )
+    fi
+
+    # Allow for additinal public key files to be included
+    for pubfile in $SSH_PUB_KEY_FILE_LIST ; do
+        if [ -f $pubfile ]; then
+            pub_ssh_key_list+=( "$(cat $pubfile)" )
+        fi
+    done
 fi        
 
 ########################################################################
@@ -306,10 +337,11 @@ disable_root: false
 EOF
 
 ## Specify SSH Authorized Key
-if [ "$SSH_PUB_KEY_STR" != "" ]; then
-    ( echo "ssh_authorized_keys:" ; \
-      echo "    - $SSH_PUB_KEY_STR" \
-    ) >> $cloud_data_text_file
+if [ ${#pub_ssh_key_list[@]} -gt 0 ]; then
+    echo "ssh_authorized_keys:" >> $cloud_data_text_file
+    for pub_key_str in "${pub_ssh_key_list[@]}" ; do
+        echo "    - $pub_key_str" >> $cloud_data_text_file
+    done
 fi
 
 ## Specify Password

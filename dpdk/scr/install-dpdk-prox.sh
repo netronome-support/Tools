@@ -203,14 +203,28 @@ test "$RTE_TARGET" != ""
     check_status "RTE_TARGET is not set"
 ########################################
 
+RTE_OUTPUT="$HOME/.cache/dpdk/build/$pkgname"
+if [ "$DPDK_VERSION" != "" ]; then
+    RTE_OUTPUT="$RTE_OUTPUT-$DPDK_VERSION"
+fi
+if [ "$version" != "" ]; then
+    RTE_OUTPUT="$RTE_OUTPUT-$version"
+fi
 export RTE_ARCH=
-export RTE_OUTPUT="$HOME/.cache/dpdk/build/$pkgname-$DPDK_VERSION-$version"
+export RTE_OUTPUT
 mkdir -p $RTE_OUTPUT
 
-make -C $proxdir install \
+########################################
+
+make -C $proxdir \
     | tee $RTE_OUTPUT/make.log
 
     check_status "failed making $pkgname"
+
+make -C $proxdir install \
+    | tee -a $RTE_OUTPUT/make.log
+
+    check_status "failed installing $pkgname"
 
 ########################################
 ##  Save DPDK-prox settings
