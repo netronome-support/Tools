@@ -53,13 +53,7 @@ EOT
 : ${DEBIAN_FRONTEND:=noninteractive}
 export DEBIAN_FRONTEND
 ########################################################################
-if which apt > /dev/null 2>&1 ; then
-    OS_PKG_ARCH="deb"
-    OS_PKG_TOOL=""
-    OS_PKG_TOOL="apt"
-    OS_ID_LIKE="debian ubuntu"
-    OS_PKG_NAME_DEVEL_ENDING='dev'
-elif which apt-get > /dev/null 2>&1 ; then
+if which apt-get > /dev/null 2>&1 ; then
     OS_PKG_ARCH="deb"
     OS_PKG_TOOL=""
     OS_PKG_TOOL="apt-get"
@@ -111,6 +105,25 @@ function repository_update () {
         ;;
   esac
    
+}
+
+########################################################################
+
+need_installed_packages_list='YES'
+declare -A installed
+
+function query_installed () {
+    if [ "$need_installed_packages_list" != "" ] && \
+            [ "$OS_PKG_ARCH" == "deb" ]; then
+        mapfile list < \
+            <( dpkg --get-selections \
+             | sed -rn 's#\s+install$##p' \
+             )
+        for pkgname in ${list[@]} ; do
+            installed["$pkgname"]="installed"
+        done
+        need_installed_packages_list=""
+    fi
 }
 
 ########################################################################
@@ -182,7 +195,12 @@ function parse_package_entry () {
     local arg="$1"
     local toolinfo="$(echo $arg | cut -d '@' -f 1)"
     local pkginfo="$(echo $arg | cut -d '@' -f 2)"
-    if [ "$pkginfo" == "" ]; then
+    if [[ ! $pkginfo =~ '@' ]] && [ "$OS_PKG_ARCH" == "deb" ]; then
+        query_installed
+        if [ "${installed[$pkginfo]:-}" == "" ]; then
+            pkglist+=( "$pkginfo" )
+        fi
+    elif [ "$pkginfo" == "" ]; then
         # Tool and package have the same name
         cond_add_tool "$toolinfo" "$toolinfo"
     else
