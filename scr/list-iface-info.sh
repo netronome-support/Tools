@@ -6,7 +6,7 @@
 ########################################################################
 ##  Install 'ethtool' if it is missing
 
-install-packages.sh "ethtool@" \
+install-packages.sh "ethtool" "bc" \
     || exit -1
 
 ########################################################################
@@ -132,6 +132,17 @@ for ifname in $list ; do
         fi
     fi
     if [ "$type" == "" ] && [[ "$businfo" =~ $re_pciaddr ]]; then
+        if [ "$driver" == "nfp_netvf" ]; then
+            pci_addr=( $(echo $businfo \
+                | tr ":." "\n" \
+                | sed -r 's/^0+([0-9])$/\1/' ) \
+            )
+            busidx=$(( 16#${pci_addr[2]} ))
+                
+            if [ $busidx -ge 8 ]; then
+                index=$(( 8 * ( $busidx - 8 ) + ${pci_addr[3]} ))
+            fi
+        fi
         printf -v s_ifname "e-pci-%s" $businfo
         type="PCI"
         addr="$businfo"

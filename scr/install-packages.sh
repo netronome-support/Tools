@@ -118,6 +118,7 @@ function query_installed () {
         mapfile list < \
             <( dpkg --get-selections \
              | sed -rn 's#\s+install$##p' \
+             | sed -r 's#:.*$##' \
              )
         for pkgname in ${list[@]} ; do
             installed["$pkgname"]="installed"
@@ -195,10 +196,10 @@ function parse_package_entry () {
     local arg="$1"
     local toolinfo="$(echo $arg | cut -d '@' -f 1)"
     local pkginfo="$(echo $arg | cut -d '@' -f 2)"
-    if [[ ! $pkginfo =~ '@' ]] && [ "$OS_PKG_ARCH" == "deb" ]; then
+    if [[ ! $arg =~ '@' ]] && [ "$OS_PKG_ARCH" == "deb" ]; then
         query_installed
-        if [ "${installed[$pkginfo]:-}" == "" ]; then
-            pkglist+=( "$pkginfo" )
+        if [ "${installed[$arg]:-}" == "" ]; then
+            pkglist+=( "$arg" )
         fi
     elif [ "$pkginfo" == "" ]; then
         # Tool and package have the same name
@@ -221,6 +222,7 @@ function parse_package_entry () {
 param=""
 opt_update=""
 opt_dryrun=""
+opt_verbose=""
 
 for arg in $@ ; do
     if [ "$param" == "" ]; then
@@ -239,9 +241,17 @@ for arg in $@ ; do
         "-n"|"--dry-run")
             opt_dryrun="yes"
             ;;
+        "-v"|"--verbose")
+            opt_verbose="yes"
+            ;;
         "-l"|"--log-file") param="--log-file" ;;
         "--update-max-age") param="$arg" ;;
+        "") ;;
         *)
+            if [ "${arg:0:1}" == "-" ]; then
+                echo "ERROR: unknown parameter ($arg)"
+                exit -1
+            fi
             parse_package_entry "$arg"
             ;;
         esac
