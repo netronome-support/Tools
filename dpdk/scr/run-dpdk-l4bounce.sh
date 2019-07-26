@@ -17,12 +17,16 @@ if [ "$prtidx" == "" ] || [ "${prtidx##*[!0-9]*}" == "" ]; then
     exit -1
 fi
 
-if [ ! -f /etc/dpdk.conf ]; then
-    echo "ERROR: missing /etc/dpdk.conf"
-    exit -1
-fi
+: ${DPDK_CONF_FILE:="/etc/dpdk.conf"}
 
-. /etc/dpdk.conf
+if [ "$RTE_SDK" == "" ] || [ ! -d $RTE_SDK ]; then
+    if [ ! -f $DPDK_CONF_FILE ]; then
+        echo "ERROR: missing $DPDK_CONF_FILE"
+        exit -1
+    fi
+
+    . $DPDK_CONF_FILE
+fi
 
 if [ ! -d $RTE_SDK/examples/l2fwd ]; then
     echo "ERROR: missing $RTE_SDK/examples/l2fwd"
@@ -142,7 +146,7 @@ cmd=( "$RTE_OUTPUT/$projname" )
 cmd+=( "-c" "$coremask" )
 cmd+=( "-n" "2" )
 cmd+=( "-m" "128" )
-cmd+=( "--file-prefix" "$projname_p$prtidx" )
+cmd+=( "--file-prefix" "${projname}_p$prtidx" )
 cmd+=( "--" )
 cmd+=( "-T" "1" )
 cmd+=( "-p" "$portmask" )
