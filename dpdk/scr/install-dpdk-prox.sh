@@ -231,6 +231,9 @@ make -C $proxdir install \
 
 execfile="$RTE_OUTPUT/prox"
 
+test -x $execfile
+    check_status "the PROX build did not produce $execfile"
+
 cp --remove-destination $execfile /usr/local/bin
     check_status "failed to copy prox binary to /usr/local/bin"
 
