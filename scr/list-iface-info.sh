@@ -90,9 +90,12 @@ for ifname in $list ; do
         | sed -rn 's/^.*driver:\s*(\S+)@.*$/\1/p')
     businfo=$(echo $info \
         | sed -rn 's/^.*@bus-info: ([^@]*)@.*$/\1/p')
+    pciaddr=$(echo " $businfo " \
+        | sed -rn 's/^.*\s('$f_pciaddr')\s.*$/\1/p')
+    addr="$pciaddr"
     s_ifname="a-other"
     ppfile="/sys/class/net/$ifname/phys_port_name"
-    type="" ; addr=""
+    type=""
     if [ "$opt_driver" != "" ] && [ "$opt_driver" != "$driver" ]; then
         continue
     fi

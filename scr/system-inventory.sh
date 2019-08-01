@@ -76,8 +76,7 @@ list+=( "/var/log/upstart/kmod.log" )
 
 list+=( "/sys/module/nfp_offloads/control/rh_entries" )
 
-list+=( "/sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages" )
-list+=( "/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages" )
+list+=( "/sys/kernel/mm/hugepages" )
 
 # Save the script itself into the capture
 list+=( "$0" )
@@ -387,11 +386,21 @@ for irfname in $irflist ; do
 done
 
 ########################################################
-# Capture listing of Netronome firmware files
+# Capture listing of Netronome firmware
 
-if [ -d /lib/firmware/netronome ]; then
-    ls -lR /lib/firmware/netronome \
+ns_fw_dir="/lib/firmware/netronome"
+
+if [ -d $ns_fw_dir ]; then
+    ls -lR $ns_fw_dir \
         > $capdir/firmware.list
+    if which readelf > /dev/null 2>&1; then
+        list=( $(find $ns_fw_dir -type f -name '*.nffw') )
+        for fname in ${list[@]} ; do
+            {   printf "\n%s:\n" "$fname"
+                readelf -p .note.build_info "$fname"
+            } >> $capdir/firmware-version.list 2>&1
+        done
+    fi
 fi
 
 ########################################################
