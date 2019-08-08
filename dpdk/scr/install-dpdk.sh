@@ -151,26 +151,30 @@ fi
 kvers=$(uname -r)
 
 prereqs=()
-prereqs+=( "wget@" )
-prereqs+=( "tar@" )
-prereqs+=( "sed@" )
-prereqs+=( "gcc@" )
-prereqs+=( "make@" )
-prereqs+=( "pkg-config@" )
-prereqs+=( "python@" ) # needed by dpdk-devbind
-prereqs+=( "lspci@pciutils" ) # needed by dpdk-devbind
-# CentOS:
-prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel-$kvers" )
-#prereqs+=( "/usr/src/kernels/$kvers/include@centos:kernel-devel" )
+prereqs+=( "wget" )
+prereqs+=( "tar" )
+prereqs+=( "sed" )
+prereqs+=( "gcc" )
+prereqs+=( "make" )
+prereqs+=( "pkg-config" )
+prereqs+=( "python" ) # needed by dpdk-devbind
+prereqs+=( "pciutils" ) # needed by dpdk-devbind (lspci)
 
-# For Mellanox Driver:
-prereqs+=( "/usr/include/infiniband/verbs.h@ubuntu:libibverbs-dev" )
-prereqs+=( "/usr/include/libmnl/libmnl.h@ubuntu:libmnl-dev" )
+prereqs+=( "libnuma-DEVEL" )
 
-prereqs+=( "/usr/include/numa.h@ubuntu:libnuma-dev,centos:numactl-devel" )
+case "$OS_ID" in
+    "centos"|"fedora"|"rhel")
+        prereqs+=( "kernel-devel-$kvers" )
+        ;;
+    "ubuntu"|"debian")
+        # For Mellanox Driver:
+        prereqs+=( "libibverbs-dev" )
+        prereqs+=( "libmnl-dev" )
+        ;;
+esac
 
 if [ "$OS_ID" == "fedora" ]; then
-    prereqs+=( "/usr/include/libelf.h@elfutils-libelf-devel" )
+    prereqs+=( "elfutils-libelf-devel" )
 fi
 
 ########################################
@@ -377,12 +381,11 @@ done
 buildconfig="$RTE_SDK/build/build.config"
 
 if [ -f $buildconfig ]; then
-    /bin/mv -f $buildconfig $buildconfig.old \
+    mv -f $buildconfig $buildconfig.old \
         || exit -1
 fi
-/bin/cp -f $RTE_SDK/build/.config \
-    ${buildconfig}.pending \
-    || exit -1
+cp -f $RTE_SDK/build/.config ${buildconfig}.pending
+    check_status "failed to 'cp -f $RTE_SDK/build/.config ${buildconfig}.pending'"
 
 ########################################
 
@@ -441,8 +444,8 @@ fi
 ########################################
 ##  Move the pending build config
 
-/bin/mv ${buildconfig}.pending $buildconfig \
-    || exit -1
+mv ${buildconfig}.pending $buildconfig
+    check_status "failed to 'mv ${buildconfig}.pending $buildconfig'"
 
 ########################################
 

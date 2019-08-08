@@ -53,6 +53,63 @@ EOT
 : ${DEBIAN_FRONTEND:=noninteractive}
 export DEBIAN_FRONTEND
 ########################################################################
+param=""
+arg_pkg_list=()
+opt_update=""
+opt_dryrun=""
+opt_verbose=""
+
+for arg in $@ ; do
+    if [ "$param" == "" ]; then
+        case $arg in
+        "-h"|"--help")
+            usage
+            exit 0
+            ;;
+        "--dump-pkg-environment")
+            echo "OS_PKG_ARCH=$OS_PKG_ARCH"
+            echo "OS_PKG_TOOL=$OS_PKG_TOOL"
+            ;;
+        "--update"|"--cache-update")
+            opt_update="yes"
+            ;;
+        "-n"|"--dry-run")
+            opt_dryrun="yes"
+            ;;
+        "-v"|"--verbose")
+            opt_verbose="yes"
+            ;;
+        "-l"|"--log-file") param="--log-file" ;;
+        "--update-max-age") param="$arg" ;;
+        "") ;;
+        *)
+            if [ "${arg:0:1}" == "-" ]; then
+                echo "ERROR: unknown parameter ($arg)"
+                exit -1
+            fi
+            arg_pkg_list+=( "$arg" )
+            ;;
+        esac
+    else
+        case "$param" in
+        "--log-file") PKG_LOG_FILE="$arg" ;;
+        "--update-max-age") PKG_UPDATE_MAX_AGE="$arg" ;;
+        esac
+        param=""
+    fi
+done
+if [ "$param" != "" ]; then
+    echo "ERROR: missing parameter for '$param'"
+    exit -1
+fi
+
+########################################################################
+function verbose () {
+    if [ "$opt_verbose" != "" ]; then
+        printf "%s\n" "$*"
+    fi
+}
+########################################################################
 if which apt-get > /dev/null 2>&1 ; then
     OS_PKG_ARCH="deb"
     OS_PKG_TOOL=""
@@ -81,6 +138,10 @@ if [ -f /etc/os-release ]; then
             "fedora") OS_ID_LIKE="redhat centos" ;;
         esac
     fi
+    verbose "OS_ID=$OS_ID"
+    verbose "OS_ID_LIKE=$OS_ID_LIKE"
+else
+    verbose "missing /etc/os-release"
 fi
 
 if [ "$(whoami)" != "root" ]; then
@@ -97,14 +158,15 @@ function repository_update () {
         if [ "$PKG_UPDATE_MAX_AGE" != "" ]; then
             if test $(find /var/lib/apt -type d -name 'lists' \
                 -mmin +$PKG_UPDATE_MAX_AGE) ; then
+                verbose "CMD: $OS_PKG_CMD update"
                 $OS_PKG_CMD update || exit -1
             fi
         else
+            verbose "CMD: $OS_PKG_CMD update"
             $OS_PKG_CMD update || exit -1
         fi
         ;;
   esac
-   
 }
 
 ########################################################################
@@ -113,15 +175,26 @@ need_installed_packages_list='YES'
 declare -A installed
 
 function query_installed () {
-    if [ "$need_installed_packages_list" != "" ] && \
-            [ "$OS_PKG_ARCH" == "deb" ]; then
-        mapfile list < \
-            <( dpkg --get-selections \
-             | sed -rn 's#\s+install$##p' \
-             | sed -r 's#:.*$##' \
-             )
-        for pkgname in ${list[@]} ; do
-            installed["$pkgname"]="installed"
+    if [ "$need_installed_packages_list" != "" ]; then
+        case "$OS_PKG_ARCH" in
+            "deb")
+                verbose "CMD: dpkg --get-selections"
+                mapfile list < \
+                    <( dpkg --get-selections \
+                    | sed -rn 's#\s+install$##p' \
+                    | sed -r 's#:.*$##' \
+                    )
+                ;;
+            "rpm")
+                verbose "CMD: rpm --query --all --info"
+                mapfile list < \
+                    <( rpm --query --all --info \
+                    | sed -rn 's#^Name\s+:\s+(\S+)$#\1#p' \
+                    )
+                ;;
+        esac
+        for inst_pkg_name in ${list[@]} ; do
+            installed["$inst_pkg_name"]="installed"
         done
         need_installed_packages_list=""
     fi
@@ -196,10 +269,18 @@ function parse_package_entry () {
     local arg="$1"
     local toolinfo="$(echo $arg | cut -d '@' -f 1)"
     local pkginfo="$(echo $arg | cut -d '@' -f 2)"
-    if [[ ! $arg =~ '@' ]] && [ "$OS_PKG_ARCH" == "deb" ]; then
+    if [[ ! $arg =~ '@' ]]; then
+        local re_devel='^.*-DEVEL$'
+        if [[ "$arg" =~ $re_devel ]]; then
+            req_pkg_name="${arg/%-DEVEL/-$OS_PKG_NAME_DEVEL_ENDING}"
+        else
+            req_pkg_name="$arg"
+        fi
         query_installed
-        if [ "${installed[$arg]:-}" == "" ]; then
-            pkglist+=( "$arg" )
+        if [ "${installed[$req_pkg_name]:-}" == "" ]; then
+            pkglist+=( "$req_pkg_name" )
+        else
+            verbose "Package '$req_pkg_name' already installed"
         fi
     elif [ "$pkginfo" == "" ]; then
         # Tool and package have the same name
@@ -219,49 +300,9 @@ function parse_package_entry () {
 
 ########################################################################
 
-param=""
-opt_update=""
-opt_dryrun=""
-opt_verbose=""
-
-for arg in $@ ; do
-    if [ "$param" == "" ]; then
-        case $arg in
-        "-h"|"--help")
-            usage
-            exit 0
-            ;;
-        "--dump-pkg-environment")
-            echo "OS_PKG_ARCH=$OS_PKG_ARCH"
-            echo "OS_PKG_TOOL=$OS_PKG_TOOL"
-            ;;
-        "--update"|"--cache-update")
-            opt_update="yes"
-            ;;
-        "-n"|"--dry-run")
-            opt_dryrun="yes"
-            ;;
-        "-v"|"--verbose")
-            opt_verbose="yes"
-            ;;
-        "-l"|"--log-file") param="--log-file" ;;
-        "--update-max-age") param="$arg" ;;
-        "") ;;
-        *)
-            if [ "${arg:0:1}" == "-" ]; then
-                echo "ERROR: unknown parameter ($arg)"
-                exit -1
-            fi
-            parse_package_entry "$arg"
-            ;;
-        esac
-    else
-        case "$param" in
-        "--log-file") PKG_LOG_FILE="$arg" ;;
-        "--update-max-age") PKG_UPDATE_MAX_AGE="$arg" ;;
-        esac
-        param=""
-    fi
+pkglist=()
+for pkgname in "${arg_pkg_list[@]}" ; do
+    parse_package_entry "$pkgname"
 done
 
 ########################################################################
@@ -274,6 +315,7 @@ fi
 ########################################################################
 
 if [ ${#pkglist[@]} -eq 0 ]; then
+    verbose "No package to install"
     exit 0
 fi
 
@@ -284,6 +326,8 @@ if [ "$opt_update" != "" ]; then
 fi
 
 ########################################################################
+
+verbose "Install: ${pkglist[*]}"
 
 if [ "$PKG_LOG_FILE" != "" ]; then
     exec $OS_PKG_CMD install -y ${pkglist[@]} \
