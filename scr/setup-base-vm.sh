@@ -4,13 +4,29 @@
 # This script is maintained at:
 #   https://github.com/netronome-support/Tools
 ########################################################################
+##  Local Configuration
+
+l_cfg_list=()
+l_cfg_list+=( "/etc/local/build-base-vm.cfg" )
+l_cfg_list+=( "$HOME/.config/build-base-vm.cfg" )
+l_cfg_list+=( "$LOCAL_BUILD_BASE_VM_CFG_FILE" )
+for fname in ${l_cfg_list[@]} ; do
+    if [ -f $fname ]; then
+        . $fname
+    fi
+done
+
+########################################################################
 ##  Variable Defaults:
+
+: "${VM_BUILD_SCR_DIR:=$NS_PKGS_DIR/vm/base}"
 
 VM_NAME="$BUILD_VM_NAME"
 
 ########################################################################
 
 : "${VM_BUILD_DPDK_VERSION:=19.02}"
+: "${VM_BUILD_DPDK_PKTGEN_VERSION:=3.5.0}"
 
 ########################################################################
 
@@ -38,11 +54,33 @@ done
 ########################################################################
 tmpdir=$(mktemp --directory)
 ########################################################################
+##  Setup Root File System (for upload to VM)
 
-# Root File System (for upload to VM)
 rfsdir="$tmpdir/rfs"
 mkdir -p $rfsdir
 mkdir -p $rfsdir/etc/profile.d
+
+########################################################################
+mkdir -p $rfsdir/root
+touch $rfsdir/root/.hushlogin
+########################################################################
+##  Setup NetPlan
+
+mkdir -p $rfsdir/etc/netplan
+mkdir -p $rfsdir/etc/cloud/cloud.cfg.d
+cat <<EOF > $rfsdir/etc/netplan/80-base-vm-interfaces.yaml
+network:
+    version: 2
+    ethernets:
+        id0:
+            match: 
+                name: en*
+            dhcp4: true
+            optional: true
+EOF
+cat <<EOF > $rfsdir/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+network: {config: disabled}
+EOF
 
 ########################################################################
 ##  Setup Netronome Profile file
@@ -67,12 +105,58 @@ EOF
 
 scrdir="$rfsdir/usr/local/bin"
 
-mkdir -p $scrdir
-cp $(which install-netronome-support-tools.sh) $scrdir
-    check_status "failed to copy install script"
+if [ -d $VM_BUILD_SCR_DIR/tools ]; then
+    fl=$(find -L $VM_BUILD_SCR_DIR/tools -type f)
+    for fn in $fl $VM_BUILD_UPLOAD_SCR_LIST ; do
+        if [ ! -f $fn ]; then
+            echo "ERROR($(basename $0)): missing $fn"
+            exit -1
+        fi
+        mkdir -p $scrdir || exit -1
+        cp $fn $scrdir || exit -1
+    done
+fi
 
 ########################################################################
+##  Upload package files to VM
 
+if [ -d "$VM_BUILD_UPLOAD_FS_ROOT" ]; then
+    rsync -a -R $VM_BUILD_UPLOAD_FS_ROOT/./ $rfsdir/./
+        check_status "local rsync failed - check for space"
+fi
+
+########################################################################
+##  Upload package files to VM
+
+dldir="$rfsdir/var/cache/download"
+
+slist=()
+slist+=( "/var/cache/download" )
+slist+=( "$HOME" )
+slist+=( "$LOCAL_VM_PKGS_DIR" )
+
+flist=()
+flist+=( "dpdk-$VM_BUILD_DPDK_VERSION.tar.xz" )
+flist+=( "pktgen-$VM_BUILD_DPDK_PKTGEN_VERSION.tar.gz" )
+flist+=( $VM_BUILD_UPLOAD_PKGS_LIST )
+for fn in ${flist[@]} ; do
+    if [ -f $fn ]; then
+        mkdir -p $dldir
+        cp $fn $dldir \
+            || exit -1
+        continue
+    fi
+    for sn in ${slist[@]} ; do
+        if [ -f $sn/$fn ]; then
+            mkdir -p $dldir
+            cp $sn/$fn $dldir \
+                || exit -1
+            break
+        fi
+    done
+done
+
+########################################################################
 echo " - RSYNC files to VM"
 
 rsync-vm.sh --vm-name "$VM_NAME" \

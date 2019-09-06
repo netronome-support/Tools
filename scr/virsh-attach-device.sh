@@ -356,6 +356,7 @@ ${cmd[@]} > $capfile 2>&1
 
 if [ $? -ne 0 ]; then
     echo "ERROR($(basename $0)): virsh attach-device failed"
+    echo "CMD: ${cmd[*]}"
     echo "XML: $xml"
     cat $capfile | tee -a $logfile
     echo

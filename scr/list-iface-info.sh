@@ -95,6 +95,11 @@ for ifname in $list ; do
     addr="$pciaddr"
     s_ifname="a-other"
     ppfile="/sys/class/net/$ifname/phys_port_name"
+    if [ -f $ppfile ]; then
+        phys_port=$(cat $ppfile 2> /dev/null)
+    else
+        phys_port=""
+    fi
     type=""
     if [ "$opt_driver" != "" ] && [ "$opt_driver" != "$driver" ]; then
         continue
@@ -109,13 +114,18 @@ for ifname in $list ; do
         type="VF-R"
         printf -v addr "%s" "$pciaddr"
     elif [ -f $ppfile ]; then
-        phys_port=$(cat $ppfile 2> /dev/null)
         re_p='^p[0-9]+$'
+        re_ps='^p[0-9]+s[0-9]+$'
         re_pf='^pf[0-9]+$'
         re_vf='^pf[0-9]+vf[0-9]+$'
         if [[ "$phys_port" =~ $re_p ]]; then
+            addr=${phys_port}
             index=${phys_port#p}
             printf -v s_ifname "b-p-%02u" $index
+            type="P"
+        elif [[ "$phys_port" =~ $re_ps ]]; then
+            addr=${phys_port}
+            printf -v s_ifname "c-p-%s" $phys_port
             type="P"
         elif [[ "$phys_port" =~ $re_pf ]]; then
             index=${phys_port#pf}

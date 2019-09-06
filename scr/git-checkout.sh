@@ -17,7 +17,9 @@ function check_status () {
 
 function run () {
     local cmd="$@"
-    printf "%s\nCMD: %s\n" "----" "$cmd" >> $logfile
+    printf "%s\nCMD: %s\nDIR: %s\n" \
+        "----" "$cmd" "$PWD" \
+        >> $logfile
     $cmd 2>&1 \
         | tee -a $logfile \
         > $outlog
@@ -61,7 +63,9 @@ fi
 ##  Parse command line
 
 param=""
+git_repo_branch=""
 git_repo_url=""
+git_repo_path=""
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
@@ -116,6 +120,7 @@ fi
 if [ "$git_repo_name" == "" ]; then
     git_repo_name=$(echo $git_repo_path \
         | tr '/' '-' \
+        | sed -r 's#^-##' \
         )
 fi
 git_bare_repo_dir="$git_bare_base_dir/$git_repo_path"
@@ -145,7 +150,7 @@ EOF
 ##  Update/clone local 'bare' repository
 
 if [ ! -d $git_bare_repo_dir/.git ]; then
-    info 1 " - Clone repo to "$git_bare_repo_dir
+    info 1 " - Clone repo to $git_bare_repo_dir"
     rm -rf $git_bare_repo_dir
     run mkdir -p $git_bare_repo_dir
     cmd=( git clone )
@@ -168,12 +173,12 @@ if [ -d "$git_repo_dir" ]; then
             | cut -d ' ' -f 1 \
     )
         check_status "failed to check status of GIT repo"
-    if [ $cmpcnt -eq 0 ]; then
-        info 1 " - Pull repository"
-        ( cd $git_repo_dir ; run git pull )
-    elif [ "$optWipeExisting" != "" ]; then
+    if [ "$optWipeExisting" != "" ]; then
         info 1 " - Wipe-out existing repository"
         rm -rf "$git_repo_dir"
+    elif [ $cmpcnt -eq 0 ]; then
+        info 1 " - Pull repository"
+        ( cd $git_repo_dir ; run git pull )
     else
         cd "$git_repo_dir"
         name="stash-$(date +'%Y-%m-%d-%H%M%S')"
@@ -187,16 +192,21 @@ if [ ! -d "$git_repo_dir" ]; then
     cmd=( git clone )
     cmd+=( --local )
     cmd+=( --shared )
-    if [ "$git_repo_branch" != "" ]; then
-        cmd+=( --branch "$git_repo_branch" )
-    fi
     cmd+=( "$git_bare_repo_dir" )
     cmd+=( "$git_repo_dir" )
     info 1 " - Clone repo to $git_repo_dir"
     run "${cmd[@]}"
-    if [ "$git_repo_branch" != "" ]; then
+    if [ "${git_repo_branch}${git_repo_tag}" != "" ]; then
         cd $git_repo_dir
-        run git checkout -b $git_repo_branch
+        cmd=( "git" "checkout" )
+        if [ "$git_repo_tag" != "" ]; then
+            cmd+=( "$git_repo_tag" )
+            : ${git_repo_branch:="$git_repo_tag"}
+        fi
+        if [ "$git_repo_branch" != "" ]; then
+            cmd+=( "-b" "$git_repo_branch" )
+        fi
+        run "${cmd[@]}"
     fi
 fi
 

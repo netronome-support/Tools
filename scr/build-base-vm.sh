@@ -4,6 +4,17 @@
 # This script is maintained at:
 #   https://github.com/netronome-support/Tools
 ########################################################################
+##  Local Configuration
+l_cfg_list=()
+l_cfg_list+=( "/etc/local/build-base-vm.cfg" )
+l_cfg_list+=( "$HOME/.config/build-base-vm.cfg" )
+l_cfg_list+=( "$LOCAL_BUILD_BASE_VM_CFG_FILE" )
+for fname in ${l_cfg_list[@]} ; do
+    if [ -f $fname ]; then
+        . $fname
+    fi
+done
+########################################################################
 
 # Location for downloading files (while actively downloading)
 : "${DOWNLOAD_CACHE_DIR:=/var/cache/download/pending}"
@@ -240,6 +251,7 @@ else
     sp=()
     sp+=( "$CLOUD_IMAGES_DIR" )
     sp+=( "$HOME" )
+    sp+=( "$LOCAL_BASE_CLOUD_IMAGE_DIR" )
     sp+=( "/var/lib/libvirt/images" )
 
     for sd in ${sp[@]} ; do

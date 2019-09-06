@@ -63,7 +63,7 @@ test "$kern_net_sd_line" == "$kern_cfg_name=y"
 ########################################################################
 
 pkgs=()
-pkgs+=( "git@" "make@" "gcc@" )
+pkgs+=( "git" "make" "gcc" )
 #pkgs+=( "build-essential" )
 
 # Kernel Header Files:
@@ -72,7 +72,7 @@ pkgs+=( "/usr/src/kernels/${kvers}/include@centos:kernel-devel-${kvers}" )
 pkgs+=( "/usr/src/linux-headers-${kvers}/include@ubuntu:linux-headers-${kvers}" )
 
 # The following is needed for 'Signing Kernel module'
-pkgs+=( "openssl@" "perl@" "mokutil@" )
+pkgs+=( "openssl" "perl" "mokutil" )
 pkgs+=( "keyctl@keyutils" )
 
 install-packages.sh ${pkgs[@]}
@@ -86,11 +86,8 @@ mkdir -p $logdir
 ########################################################################
 
 drvdir="$GIT_REPO_BASE_DIR/nfp-drv-kmods"
-if [ ! -d $drvdir ]; then
-    echo " - Clone $NS_GIT_NFP_DRV_REPO_URL"
-    git clone $NS_GIT_NFP_DRV_REPO_URL $drvdir
-        check_status "failed to clone $NS_GIT_NFP_DRV_REPO_URL"
-fi
+
+git-checkout.sh --wipe-existing $NS_GIT_NFP_DRV_REPO_URL $drvdir
 
 ########################################################################
 
