@@ -214,20 +214,39 @@ pkgs=()
 pkgs+=( "wget@" )
 pkgs+=( "gawk@" )
 pkgs+=( "ssh-keygen@openssh-client" )
-pkgs+=( "cloud-localds@ubuntu:cloud-image-utils,rhel:cloud-utils" )
-pkgs+=( "genisoimage@rhel:genisoimage" )
 pkgs+=( "qemu-system-x86_64@qemu-system-x86" )
-pkgs+=( "virt-install@ubuntu:virtinst,rhel:virt-install" )
 
-if [ "$ID-$VERSION_ID" == "ubuntu-18.10" ]; then
-    pkgs+=( "/usr/share/doc/libvirt-daemon-system/copyright@libvirt-daemon-system" )
-else
-    pkgs+=( "/usr/share/doc/libvirt-bin/copyright@libvirt-bin" )
-fi
+case "$ID" in
+  "ubuntu")
+    if [ "$VERSION_ID" == "18.10" ]; then
+        pkgs+=( "libvirt-daemon-system" )
+    else
+        pkgs+=( "libvirt-bin" )
+    fi
+    pkgs+=( "cloud-image-utils" )
+    pkgs+=( "virtinst" )
+    ;;
+  "centos"|"rhel"|"fedora")
+    pkgs+=( "libvirt" "libvirt-python" )
+    pkgs+=( "cloud-init" "cloud-utils" )
+    pkgs+=( "genisoimage" )
+    pkgs+=( "libguestfs-tools" )
+    pkgs+=( "virt-install" )
+    ;;
+esac
 
 install-packages.sh --cache-update ${pkgs[@]}
     check_status "failed to install pre-requisite packages"
 
+########################################################################
+case "$ID" in
+  "centos"|"rhel"|"fedora")
+    systemctl enable libvirtd
+        check_status "failed to enable libvirtd"
+    systemctl start libvirtd
+        check_status "failed to start libvirtd"
+    ;;
+esac
 ########################################################################
 ##  Look for local copy of Cloud Image
 

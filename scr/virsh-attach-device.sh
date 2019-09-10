@@ -20,6 +20,7 @@ model_type="virtio"
 source_mode="client"
 ########################################
 param=""
+: ${nfp_dev_idx:='0'}
 for arg in "$@" ; do
   if [ "$param" == "" ]; then
     case "$arg" in
@@ -34,6 +35,7 @@ for arg in "$@" ; do
         echo "  --hw-addr <MAC address>"
         echo "  --pci-addr <PCI address>"
         echo "  --eth-801q-vid <integer>"
+        echo "  --nfp-idx <integer>"
         echo "  --nfp-vf-index <integer>"
         echo "  --nfp-vf-repr <ifname>"
         echo "  --br-name <bridge name>"
@@ -53,6 +55,7 @@ for arg in "$@" ; do
       "--hw-addr")              param="$arg" ;;
       "--pci-addr")             param="$arg" ;;
       "--eth-801q-vid")         param="$arg" ;;
+      "--nfp-dev-idx")          param="$arg" ;;
       "--nfp-vf-index")         param="$arg" ;;
       "--nfp-vf-repr")          param="$arg" ;;
       "--br-name")              param="$arg" ;;
@@ -78,6 +81,7 @@ for arg in "$@" ; do
       "--hw-addr")              hw_addr="$arg" ;;
       "--pci-addr")             pci_addr="$arg" ;;
       "--eth-801q-vid")         eth_801q_vid="$arg" ;;
+      "--nfp-dev-idx")          nfp_dev_idx="$arg" ;;
       "--nfp-vf-index")         nfp_vf_index="$arg" ;;
       "--nfp-vf-repr")          nfp_vf_repr_iface="$arg" ;;
       "--br-name")              br_name="$arg" ;;
@@ -232,12 +236,20 @@ case $type in
 esac
 ########################################
 if [ "$require_pci_addr" != "" ] && [ "$pci_addr" == "" ]; then
+    nfp_pci_list=( $(lspci -d 19ee: -s '00.0' \
+        | cut -d ' ' -f 1 ) )
+    test ${#nfp_pci_list[@]} -gt 0
+        check_status "there is no NFP detected on the PCI bus"
+    if [[ ! "$nfp_dev_idx" =~ $re_integer ]]; then
+        false ; check_status "NFP index is not an integer ($nfp_dev_idx)"
+    fi
+    nfp_pci_addr="${nfp_pci_list[$nfp_dev_idx]}"
+    test "$nfp_pci_addr" != ""
+        check_status "there is no NFP with index $nfp_dev_idx"
+    nfp_pci_bus=$(echo $nfp_pci_addr \
+        | sed -r 's/^.*(${xdig}{2}):${xdig}{2}.${xdig}\$/\1/')
     test "$nfp_vf_index" != ""
         check_status "missing PCI address for device"
-    nfp_pci_bus=$(lspci -d 19ee: \
-        | head -1 \
-        | cut -d ' ' -f 1 \
-        | sed -r "s/:${xdig}{2}.${xdig}\$//")
     printf -v pci_addr "%s:%02x.%u" "$nfp_pci_bus" \
         $(( 8 + nfp_vf_index / 8 )) \
         $(( nfp_vf_index % 8 ))

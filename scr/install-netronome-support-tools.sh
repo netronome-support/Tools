@@ -10,6 +10,9 @@
 : ${GIT_URL:="https://github.com/$GITHUB_REPO_PATH"}
 ########################################################################
 tmpdir=$(mktemp --directory)
+: ${logdir:=$HOME/.logs}
+: ${logfile:=$logdir/install-netronome-support-tools.log}
+mkdir -p $logdir
 ########################################################################
 function check_status () {
     rc="$?" ; errmsg="$1"
@@ -20,13 +23,16 @@ function check_status () {
 }
 ########################################################################
 function run () {
-    local cmd="$@"
+    local cmd=( "$@" )
     local outlog="$tmpdir/output.log"
-    $cmd > $outlog 2>&1
+    printf "##  - %s\n##  %s\n" "$(date)" "${cmd[*]}" \
+        | tee -a $logfile > $outlog
+    "${cmd[@]}" 2>&1 \
+        | tee -a $logfile > $outlog
     if [ $? -ne 0 ]; then
-        echo "CMD: $cmd"
+        echo "ERROR($(basename $0)): Command failed (log below)"
+        echo "CMD: ${cmd[*]}"
         cat $outlog
-        echo "ERROR($(basename $0))!"
         exit -1
     fi
 }

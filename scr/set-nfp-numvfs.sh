@@ -15,7 +15,7 @@ function check_status () {
 }
 ############################################################
 param=""
-nfpidx=0
+: ${nfp_dev_idx:=0}
 for arg in "$@" ; do
     if [ "$param" == "" ]; then
         case "$arg" in
@@ -34,7 +34,7 @@ for arg in "$@" ; do
         esac
     else
         case "$param" in
-          "--nfp-idx") nfpidx=$arg ;;
+          "--nfp-idx") nfp_dev_idx=$arg ;;
         esac
         param=""
     fi
@@ -48,17 +48,17 @@ if [[ ! "$req_num_vfs" =~ $re_integer ]]; then
     false ; check_status "argument is not an integer ($req_num_vfs)"
 fi
 ############################################################
-##  Retrieve list of NFPs and check that 'nfpidx' exists
+##  Retrieve list of NFPs and check that 'nfp_dev_idx' exists
 nfp_pci_list=( $(lspci -d 19ee: -s '00.0' \
     | cut -d ' ' -f 1 ) )
 test ${#nfp_pci_list[@]} -gt 0
     check_status "there is no NFP detected on the PCI bus"
-if [[ ! "$nfpidx" =~ $re_integer ]]; then
-    false ; check_status "NFP index is not an integer ($nfpidx)"
+if [[ ! "$nfp_dev_idx" =~ $re_integer ]]; then
+    false ; check_status "NFP index is not an integer ($nfp_dev_idx)"
 fi
-nfp_bdf="${nfp_pci_list[$nfpidx]}"
+nfp_bdf="${nfp_pci_list[$nfp_dev_idx]}"
 test "$nfp_bdf" != ""
-    check_status "there is no NFP with index $nfpidx"
+    check_status "there is no NFP with index $nfp_dev_idx"
 ############################################################
 ##  Check that the 'sysfs' file 'sriov_numvfs' file exists
 nfp_pci_dir="/sys/bus/pci/devices/0000:$nfp_bdf"
