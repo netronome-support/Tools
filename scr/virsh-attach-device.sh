@@ -246,8 +246,11 @@ if [ "$require_pci_addr" != "" ] && [ "$pci_addr" == "" ]; then
     nfp_pci_addr="${nfp_pci_list[$nfp_dev_idx]}"
     test "$nfp_pci_addr" != ""
         check_status "there is no NFP with index $nfp_dev_idx"
+    pci_fmt="(.*$xdig{2}):$xdig{2}\.$xdig"
     nfp_pci_bus=$(echo $nfp_pci_addr \
-        | sed -r 's/^.*(${xdig}{2}):${xdig}{2}.${xdig}\$/\1/')
+        | sed -r "s/^.*${pci_fmt}\$/\1/")
+    test "$nfp_pci_bus" != ""
+        check_status "failed to extract 'bus' from $nfp_pci_addr"
     test "$nfp_vf_index" != ""
         check_status "missing PCI address for device"
     printf -v pci_addr "%s:%02x.%u" "$nfp_pci_bus" \
@@ -307,8 +310,7 @@ if [ "$pci_addr" != "" ]; then
     elif [ "$bdf1_sp" != "" ] ; then
         bdf_sp="$bdf1_sp"
     else
-        echo "ERROR: could not parse PCI BDF $pci_addr"
-        exit -1
+        false ; check_status "could not parse PCI BDF $pci_addr"
     fi
 
     if [ "$pci_dev_driver" != "" ]; then
