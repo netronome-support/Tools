@@ -28,8 +28,8 @@ cp ${opts[@]} ${list[@]} $TOOLS_DEST_DIR \
 
 # Install GCC
 pkglist=()
-pkglist+=( "gcc@" )
-$TOOLS_DEST_DIR/install-packages.sh ${pkglist[@]} \
+pkglist+=( "gcc" )
+$TOOLS_DEST_DIR/install-packages.sh --update ${pkglist[@]} \
     || exit -1
 
 gcc $tools_dir/src/rate.c -o $TOOLS_DEST_DIR/rate
