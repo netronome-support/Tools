@@ -19,8 +19,6 @@ done
 ########################################################################
 ##  Variable Defaults:
 
-: "${VM_BUILD_SCR_DIR:=$NS_PKGS_DIR/vm/base}"
-
 VM_NAME="$BUILD_VM_NAME"
 
 ########################################################################
@@ -61,8 +59,29 @@ mkdir -p $rfsdir
 mkdir -p $rfsdir/etc/profile.d
 
 ########################################################################
+scrdir="$rfsdir/usr/local/bin"
+mkdir -p $scrdir
+########################################################################
 mkdir -p $rfsdir/root
 touch $rfsdir/root/.hushlogin
+########################################################################
+##  
+
+: ${LOCAL_FIND_HTTP_PROXY_TOOL:="get-server-proxy-settings.sh"}
+if which $LOCAL_FIND_HTTP_PROXY_TOOL > /dev/null 2>&1 ; then
+    SERVER_HTTP_PROXY=$($LOCAL_FIND_HTTP_PROXY_TOOL)
+fi
+
+if [ "$SERVER_HTTP_PROXY" != "" ]; then
+cat <<EOF > $tmpdir/ns-proxy.sh
+
+# Netronome Script enabling proxy
+
+export http_proxy=$IVG_HTTP_PROXY
+
+EOF
+fi
+
 ########################################################################
 ##  Setup NetPlan
 
@@ -101,21 +120,21 @@ add_path_after "/usr/local/bin"
 EOF
 
 ########################################################################
-##  Update VM with various scripts and tools
+##  Copy scripts to Base VM
 
-scrdir="$rfsdir/usr/local/bin"
+vm_scr_list+=( "install-netronome-support-tools.sh" )
+vm_scr_list+=( "install-packages.sh" )
 
-if [ -d $VM_BUILD_SCR_DIR/tools ]; then
-    fl=$(find -L $VM_BUILD_SCR_DIR/tools -type f)
-    for fn in $fl $VM_BUILD_UPLOAD_SCR_LIST ; do
-        if [ ! -f $fn ]; then
-            echo "ERROR($(basename $0)): missing $fn"
-            exit -1
-        fi
-        mkdir -p $scrdir || exit -1
-        cp $fn $scrdir || exit -1
-    done
-fi
+for vm_scr_name in "${vm_scr_list[@]}" ; do
+    if [ -f "$vm_scr_name" ]; then
+        cp -a "$vm_scr_name" $scrdir
+        continue
+    fi
+    file="$(which $vm_scr_name 2> /dev/null)"
+    if [ -f $file ]; then
+        cp -a "$file" $scrdir
+    fi
+done
 
 ########################################################################
 ##  Upload package files to VM
