@@ -47,9 +47,10 @@ done
 ##  CentOS
 
 # CentOS 7 Build Number
-: "${CENTOS_BUILD_INDEX:=1811}"
-: "${CENTOS_VERSION:=7}"
-: "${CENTOS_ARCH:=x86_64}"
+: ${CENTOS_BUILD_INDEX:=1811}
+: ${CENTOS_VERSION:=7}
+: ${CENTOS_ARCH:=x86_64}
+: ${CENTOS_OS_VARIANT:='centos7.0'}
 
 # URL for CentOS Cloud Images
 : "${CENTOS_URL:=https://cloud.centos.org/centos/$CENTOS_VERSION/images}"
@@ -65,7 +66,8 @@ dfname="$dfname-GenericCloud-${CENTOS_BUILD_INDEX}.qcow2"
 ##  Ubuntu 
 
 # xenial = 16.04, artful = 17.10, bionic = 18.04
-: "${UBUNTU_VERSION:=bionic}"
+: ${UBUNTU_VERSION:=bionic}
+: ${UBUNTU_OS_VARIANT:='ubuntu18.04'}
 
 # URL for Ubuntu Cloud Images
 : "${UBUNTU_URL:=https://cloud-images.ubuntu.com/${UBUNTU_VERSION}/current}"
@@ -91,12 +93,14 @@ case "$BASE_IMAGE_OS" in
     : "${IMAGE_FILE:=$CENTOS_IMAGE_FILE}"
     : "${IMAGE_NAME:=CentOS-${CENTOS_VERSION}-${CENTOS_BUILD_INDEX}-base}"
     OS_PKG_TOOL="yum"
+    : ${OS_VARIANT:=$CENTOS_OS_VARIANT}
     ;;
   "ubuntu")
     : "${IMAGE_URL:=$UBUNTU_URL}"
     : "${IMAGE_FILE:=$UBUNTU_IMAGE_FILE}"
     : "${IMAGE_NAME:=Ubuntu-${UBUNTU_VERSION}-base}"
     OS_PKG_TOOL="apt-get"
+    : ${OS_VARIANT:=$UBUNTU_OS_VARIANT}
     ;;
   *)
     echo "ERROR: unknown OS ($BASE_IMAGE_OS)"
@@ -455,6 +459,7 @@ opts+=( "--network" "bridge=virbr0,model=virtio" )
 opts+=( "--graphics" "vnc" )
 opts+=( "--accelerate" )
 opts+=( "--os-type=linux" )
+opts+=( "--os-variant" "$OS_VARIANT" )
 opts+=( "--noautoconsole" )
 opts+=( "--import" )
 
